@@ -18,6 +18,8 @@ edition = "2021"
 default = []
 std = []
 i2c_target = []
+i3c_master = []
+i3c_target = []
 test-rsa = []
 test-ecdsa = []
 test-hmac = []
@@ -38,7 +40,8 @@ heapless = "0.8.0"
 nb = "1.1.0"
 paste = "1.0"
 
-cortex-m = { version = "0.7.5" }
+critical-section = "1.2"
+cortex-m = { version = "0.7.5", features = ["critical-section-single-core"] }
 cortex-m-rt = { version = "0.6.5", features = ["device"] }
 panic-halt = "1.0.0"
 

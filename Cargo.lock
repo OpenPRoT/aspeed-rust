@@ -65,6 +65,7 @@ dependencies = [
  "ast1060-pac",
  "cortex-m",
  "cortex-m-rt",
+ "critical-section",
  "embedded-hal 1.0.0",
  "embedded-hal 1.0.0-alpha.1",
  "embedded-io",
@@ -173,6 +174,7 @@ checksum = "8ec610d8f49840a5b376c69663b6369e71f4b34484b9b2eb29fb918d92516cb9"
 dependencies = [
  "bare-metal",
  "bitfield",
+ "critical-section",
  "embedded-hal 0.2.7",
  "volatile-register",
 ]
@@ -197,6 +199,12 @@ dependencies = [
  "quote",
  "syn 1.0.109",
 ]
+
+[[package]]
+name = "critical-section"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 
 [[package]]
 name = "embedded-hal"

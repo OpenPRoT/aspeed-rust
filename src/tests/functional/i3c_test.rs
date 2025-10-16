@@ -1,0 +1,233 @@
+// Licensed under the Apache-2.0 license
+
+use crate::common::{DummyDelay, NoOpLogger, UartLogger};
+use crate::i3c::ast1060_i3c::HardwareInterface;
+use crate::i3c::ast1060_i3c::I3cMsg;
+use crate::i3c::ast1060_i3c::{Ast1060I3c, I3C_MSG_READ, I3C_MSG_STOP};
+use crate::i3c::i3c_config::I3cConfig;
+use crate::i3c::i3c_config::I3cTargetConfig;
+use crate::i3c::i3c_controller::I3cController;
+use crate::i3c::ibi_workq::{i3c_ibi_workq_consumer, IbiWork};
+use crate::pinctrl;
+use crate::uart::{self, Config, UartController};
+use ast1060_pac::Peripherals;
+use core::ptr::read_volatile;
+use embedded_hal::delay::DelayNs;
+use embedded_io::Write;
+use proposed_traits::i3c_master::I3c;
+// I3cTarget
+use proposed_traits::i3c_target::{DynamicAddressable, IBICapable};
+
+pub fn dump_i3c_controller_registers(uart: &mut UartController<'_>, base: u32) {
+    // [7e7a4000] 80000200 00008009 000f40bb 00000000
+    // [7e7a4010] 00000000 00000000 00000000 001f0000
+    // [7e7a4020] 01010001 00000000 00000000 ffffffff
+    unsafe {
+        let reg_base = base as *mut u32;
+        writeln!(uart, "rust I3C reg dump:\r").unwrap();
+        for i in 0..0xc0 {
+            let v = read_volatile(reg_base.add(i));
+            if i % 4 == 0 {
+                write!(uart, "[{:08x}]", base + u32::try_from(i).unwrap() * 4).unwrap();
+            }
+            write!(uart, " {v:08x}").unwrap();
+            if i % 4 == 3 {
+                writeln!(uart, "\r").unwrap();
+            }
+        }
+    }
+}
+
+pub fn test_i3c_master(uart: &mut UartController<'_>) {
+    let peripherals = unsafe { Peripherals::steal() };
+    let mut delay = DummyDelay {};
+    let mut dbg_uart = UartController::new(peripherals.uart, &mut delay);
+
+    writeln!(uart, "\r\n####### I3C master test #######\r\n").unwrap();
+    unsafe {
+        dbg_uart.init(&Config {
+            baud_rate: 115_200,
+            word_length: uart::WordLength::Eight as u8,
+            parity: uart::Parity::None,
+            stop_bits: uart::StopBits::One,
+            clock: 24_000_000,
+        });
+    }
+
+    pinctrl::Pinctrl::apply_pinctrl_group(pinctrl::PINCTRL_I3C2);
+    let hw = Ast1060I3c::<ast1060_pac::I3c2, UartLogger>::new(UartLogger::new(&mut dbg_uart));
+
+    let mut ctrl = I3cController {
+        hw,
+        config: I3cConfig::new(),
+        logger: NoOpLogger,
+    };
+
+    {
+        let c = &mut ctrl.config;
+        c.init_runtime_fields();
+        c.is_secondary = false;
+        c.i2c_scl_hz = 1_000_000;
+        c.i3c_scl_hz = 12_500_000;
+        c.i3c_pp_scl_hi_period_ns = 250;
+        c.i3c_pp_scl_lo_period_ns = 250;
+        c.i3c_od_scl_hi_period_ns = 0;
+        c.i3c_od_scl_lo_period_ns = 0;
+        c.sda_tx_hold_ns = 20;
+    }
+
+    let mut ibi_cons = i3c_ibi_workq_consumer(ctrl.hw.bus_num() as usize);
+    let known_pid = 0x07ec_0503_1000u64;
+    let ctrl_dev_slot0 = 0;
+    ctrl.init();
+
+    let dyn_addr = if let Some(da) = ctrl.config.addrbook.alloc_from(8) {
+        ctrl.attach_i3c_dev(known_pid, da, ctrl_dev_slot0).unwrap();
+        writeln!(uart, "Pre-attached dev at slot 0, dyn addr {da}\r").unwrap();
+        da
+    } else {
+        writeln!(uart, "no dyn addr\r").unwrap();
+        return;
+    };
+
+    // Dump I3C2 registers
+    // dump_i3c_controller_registers(uart, 0x7e7a_4000);
+    writeln!(uart, "ctrl dev at slot 0, dyn addr {dyn_addr}\r").unwrap();
+    loop {
+        if let Some(work) = ibi_cons.dequeue() {
+            match work {
+                IbiWork::HotJoin => {
+                    writeln!(uart, "[IBI] hotjoin\r").unwrap();
+                    let _ = ctrl.handle_hot_join();
+                    ctrl.assign_dynamic_address(dyn_addr).unwrap();
+                }
+                IbiWork::Sirq { addr, len, data } => {
+                    writeln!(uart, "[IBI] SIRQ from 0x{addr:02x}, len {len}\r").unwrap();
+                    writeln!(uart, "  IBI payload:").unwrap();
+                    for i in 0..len {
+                        write!(uart, " {:02x}", data[i as usize]).unwrap();
+                    }
+                    writeln!(uart, "\r").unwrap();
+                    match ctrl.acknowledge_ibi(addr) {
+                        Ok(()) => {}
+                        Err(e) => {
+                            writeln!(uart, "  acknowledge_ibi failed: {e:?}\r").unwrap();
+                        }
+                    }
+                    let mut rx_buf = [0u8; 128];
+                    let mut msgs = [I3cMsg {
+                        buf: Some(&mut rx_buf[..]),
+                        actual_len: 128,
+                        num_xfer: 0,
+                        flags: I3C_MSG_READ | I3C_MSG_STOP,
+                        hdr_mode: 0,
+                        hdr_cmd_mode: 0,
+                    }];
+                    let _ = ctrl.hw.priv_xfer(&mut ctrl.config, known_pid, &mut msgs);
+                    writeln!(uart, "  read data:").unwrap();
+                    for i in 0..msgs[0].actual_len {
+                        write!(uart, " {:02x}", rx_buf[i as usize]).unwrap();
+                    }
+                    writeln!(uart, "\r").unwrap();
+                }
+                IbiWork::TargetDaAssignment => {
+                    writeln!(uart, "[IBI] TargetDaAssignment\r").unwrap();
+                }
+            }
+        }
+    }
+}
+
+pub fn test_i3c_target(uart: &mut UartController<'_>) {
+    let peripherals = unsafe { Peripherals::steal() };
+    let mut delay = DummyDelay {};
+    let mut dbg_uart = UartController::new(peripherals.uart, &mut delay);
+
+    writeln!(uart, "\r\n####### I3C target test #######\r\n").unwrap();
+    unsafe {
+        dbg_uart.init(&Config {
+            baud_rate: 115_200,
+            word_length: uart::WordLength::Eight as u8,
+            parity: uart::Parity::None,
+            stop_bits: uart::StopBits::One,
+            clock: 24_000_000,
+        });
+    }
+
+    pinctrl::Pinctrl::apply_pinctrl_group(pinctrl::PINCTRL_I3C2);
+    let hw = Ast1060I3c::<ast1060_pac::I3c2, UartLogger>::new(UartLogger::new(&mut dbg_uart));
+
+    let mut ctrl = I3cController {
+        hw,
+        config: I3cConfig::new(),
+        logger: NoOpLogger,
+    };
+
+    {
+        let c = &mut ctrl.config;
+        c.init_runtime_fields();
+        // Configure as target
+        c.is_secondary = true;
+        c.i2c_scl_hz = 1_000_000;
+        c.i3c_scl_hz = 12_500_000;
+        c.i3c_pp_scl_hi_period_ns = 36;
+        c.i3c_pp_scl_lo_period_ns = 36;
+        c.i3c_od_scl_hi_period_ns = 0;
+        c.i3c_od_scl_lo_period_ns = 0;
+        c.sda_tx_hold_ns = 20;
+        c.dcr = 0xcc;
+        c.target_config = Some(I3cTargetConfig::new(0, Some(0), 0xae));
+    }
+    let mut ibi_cons = i3c_ibi_workq_consumer(ctrl.hw.bus_num() as usize);
+    ctrl.init();
+    let dyn_addr = 9;
+    let dev_idx = 0;
+    let _ = ctrl.hw.attach_i3c_dev(dev_idx, dyn_addr);
+    // Dump I3C2 registers
+    // dump_i3c_controller_registers(uart, 0x7e7a_4000);
+    loop {
+        if let Some(work) = ibi_cons.dequeue() {
+            match work {
+                IbiWork::HotJoin => {
+                    // do nothing in target mode
+                    writeln!(uart, "[IBI] hotjoin\r").unwrap();
+                }
+                IbiWork::Sirq { addr, len, data: _ } => {
+                    // do nothing in target mode
+                    writeln!(uart, "[IBI] SIRQ from 0x{addr:02x}, len {len}\r").unwrap();
+                }
+                IbiWork::TargetDaAssignment => {
+                    let mut delay = DummyDelay {};
+                    delay.delay_ns(4_000_000_000);
+                    writeln!(uart, "[IBI] TargetDaAssignment\r").unwrap();
+                    let da = ctrl.config.target_config.as_ref().unwrap().addr;
+                    writeln!(
+                        uart,
+                        "  dyn addr 0x{:02x} was assigned by master\r",
+                        da.unwrap()
+                    )
+                    .unwrap();
+                    ctrl.on_dynamic_address_assigned(da.unwrap());
+                    break;
+                }
+            }
+        }
+    }
+    let mut ibi_count = 0;
+    loop {
+        let mut delay = DummyDelay {};
+        delay.delay_ns(4_000_000_000);
+        let mut data = [0u8; 16];
+        for (i, b) in data.iter_mut().enumerate() {
+            *b = u8::try_from(i).unwrap();
+        }
+        writeln!(uart, "send ibi #{ibi_count}\r").unwrap();
+        ctrl.get_ibi_payload(&mut data).unwrap();
+        ibi_count += 1;
+        if ibi_count > 100 {
+            break;
+        }
+    }
+
+    writeln!(uart, "I3C target test done\r").unwrap();
+}

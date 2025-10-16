@@ -9,6 +9,7 @@ pub mod hace_controller;
 pub mod hash;
 pub mod hmac;
 pub mod i2c;
+pub mod i3c;
 pub mod pinctrl;
 pub mod rsa;
 pub mod spi;
