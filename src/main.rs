@@ -8,12 +8,17 @@ use core::sync::atomic::AtomicBool;
 use aspeed_ddk::uart::{Config, UartController};
 use aspeed_ddk::watchdog::WdtController;
 use ast1060_pac::Peripherals;
+#[cfg(any(feature = "i3c_master", feature = "i3c_target"))]
+use ast1060_pac::Spipf;
 use ast1060_pac::{Wdt, Wdt1};
 
 use aspeed_ddk::ecdsa::AspeedEcdsa;
 use aspeed_ddk::hace_controller::HaceController;
 use aspeed_ddk::rsa::AspeedRsa;
 use aspeed_ddk::spi;
+
+#[cfg(any(feature = "i3c_master", feature = "i3c_target"))]
+use aspeed_ddk::spimonitor::{RegionInfo, SpiMonitor, SpimExtMuxSel};
 use aspeed_ddk::syscon::{ClockId, ResetId, SysCon};
 use fugit::MillisDurationU32 as MilliSeconds;
 
@@ -22,6 +27,8 @@ use aspeed_ddk::tests::functional::gpio_test;
 use aspeed_ddk::tests::functional::hash_test::run_hash_tests;
 use aspeed_ddk::tests::functional::hmac_test::run_hmac_tests;
 use aspeed_ddk::tests::functional::i2c_test;
+#[cfg(any(feature = "i3c_master", feature = "i3c_target"))]
+use aspeed_ddk::tests::functional::i3c_test;
 use aspeed_ddk::tests::functional::rsa_test::run_rsa_tests;
 use aspeed_ddk::tests::functional::timer_test::run_timer_tests;
 use panic_halt as _;

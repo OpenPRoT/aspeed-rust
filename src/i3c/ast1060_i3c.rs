@@ -2,9 +2,7 @@
 
 use crate::common::{DummyDelay, Logger};
 use crate::i3c::ccc::{
-    ccc_events_all_set, ccc_events_set, ccc_rstact_all, ccc_rstdaa_all, CccPayload,
-    CccRstActDefByte, I3C_CCC_DEVCTRL, I3C_CCC_ENTDAA, I3C_CCC_EVT_ALL, I3C_CCC_EVT_HJ,
-    I3C_CCC_EVT_INTR, I3C_CCC_SETHID,
+    ccc_events_set, CccPayload, I3C_CCC_DEVCTRL, I3C_CCC_ENTDAA, I3C_CCC_EVT_INTR, I3C_CCC_SETHID,
 };
 use crate::i3c::i3c_config::{Completion, I3cConfig};
 use crate::i3c::ibi_workq;
@@ -40,6 +38,7 @@ pub const I3C_BUS_THIGH_MAX_NS: u32 = 41;
 pub const NSEC_PER_SEC: u32 = 1_000_000_000;
 pub const SDA_TX_HOLD_MIN: u32 = 0b001;
 pub const SDA_TX_HOLD_MAX: u32 = 0b111;
+pub const SDA_TX_HOLD_MASK: u32 = 0x0007_0000; // bits 18:16
 
 pub const SLV_DCR_MASK: u32 = 0x0000_ff00;
 pub const SLV_EVENT_CTRL: u32 = 0x38;
@@ -401,7 +400,6 @@ pub trait HardwareInterface {
     fn exit_sw_mode(&mut self);
     fn i3c_toggle_scl_in(&mut self, count: u32);
     fn gen_internal_stop(&mut self);
-    fn i3c_bus_init(&mut self, config: &mut I3cConfig);
     fn even_parity(byte: u8) -> bool;
     fn set_ibi_mdb(&mut self, mdb: u8);
     fn exit_halt(&mut self, config: &mut I3cConfig);
@@ -424,7 +422,6 @@ pub trait HardwareInterface {
     fn attach_i3c_dev(&mut self, pos: usize, addr: u8) -> Result<(), I3cDrvError>;
     fn do_ccc(&mut self, config: &mut I3cConfig, ccc: &mut CccPayload) -> Result<(), I3cDrvError>;
     fn do_entdaa(&mut self, config: &mut I3cConfig, index: u32) -> Result<(), I3cDrvError>;
-    fn handle_unsolicited(&mut self, config: &mut I3cConfig);
     fn priv_xfer_build_cmds<'a>(
         &mut self,
         cmds: &mut [I3cCmd<'a>],
@@ -845,12 +842,6 @@ impl<I3C: Instance, L: Logger> HardwareInterface for Ast1060I3c<I3C, L> {
             i3c_dat_write!(self, i, |w| {
                 w.sirreject().set_bit().mrreject().set_bit()
             });
-            i3c_debug!(
-                self.logger,
-                "dat_addr[{}] = {:#x}",
-                i,
-                i3c_dat_read!(self, i)
-            );
         }
 
         self.i3c.i3cd02c().write(|w| unsafe { w.bits(0xffff_ffff) });
@@ -870,11 +861,6 @@ impl<I3C: Instance, L: Logger> HardwareInterface for Ast1060I3c<I3C, L> {
         }
 
         self.i3c_enable(config);
-
-        // Perform bus initialization
-        if !config.is_secondary {
-            self.i3c_bus_init(config);
-        }
 
         i3c_debug!(self.logger, "i3c enabled");
         // Enable hot-join
@@ -995,52 +981,77 @@ impl<I3C: Instance, L: Logger> HardwareInterface for Ast1060I3c<I3C, L> {
     fn init_clock(&mut self, config: &mut I3cConfig) {
         let clk_rate = self.get_clock_rate();
         i3c_debug!(self.logger, "i3c clock rate: {} Hz", clk_rate);
-        config.core_period = (1_000_000_000_u32).div_ceil(clk_rate);
+        config.core_period = (NSEC_PER_SEC).div_ceil(clk_rate);
+
+        let ns_to_cnt_u8 =
+            |ns: u32| -> u8 { u8::try_from(ns.div_ceil(config.core_period)).unwrap_or(u8::MAX) };
+        let ns_to_cnt_u16 =
+            |ns: u32| -> u16 { u16::try_from(ns.div_ceil(config.core_period)).unwrap_or(u16::MAX) };
 
         // I2C FM
-        let (i2c_hi, i2c_lo) = self.calc_i2c_clk(config.i2c_scl_hz);
-        let hcnt: u32 = i2c_hi.div_ceil(config.core_period);
-        let lcnt: u32 = i2c_lo.div_ceil(config.core_period);
+        let (fm_hi_ns, fm_lo_ns) = self.calc_i2c_clk(config.i2c_scl_hz);
         self.i3c.i3cd0bc().write(|w| unsafe {
             w.i2cfmhcnt()
-                .bits(u16::try_from(hcnt).unwrap_or(u16::MAX))
+                .bits(ns_to_cnt_u16(fm_hi_ns))
                 .i2cfmlcnt()
-                .bits(u16::try_from(lcnt).unwrap_or(u16::MAX))
+                .bits(ns_to_cnt_u16(fm_lo_ns))
         });
 
         // I2C FMP
-        let (i2c_hi, i2c_lo) = self.calc_i2c_clk(1_000_000);
-        let hcnt: u32 = i2c_hi.div_ceil(config.core_period);
-        let lcnt: u32 = i2c_lo.div_ceil(config.core_period);
+        let (i2c_fmp_hi_ns, i2c_fmp_lo_ns) = self.calc_i2c_clk(1_000_000);
         self.i3c.i3cd0c0().write(|w| unsafe {
             w.i2cfmphcnt()
-                .bits(u8::try_from(hcnt).unwrap_or(u8::MAX))
+                .bits(ns_to_cnt_u8(i2c_fmp_hi_ns))
                 .i2cfmplcnt()
-                .bits(u16::try_from(lcnt).unwrap_or(u16::MAX))
+                .bits(ns_to_cnt_u16(i2c_fmp_lo_ns))
         });
 
         // I3C OD
-        self.i3c
-            .i3cd0b4()
-            .write(|w| unsafe { w.i3codhcnt().bits(0x64).i3codlcnt().bits(0x64) });
+        let (od_hi_ns, od_lo_ns) =
+            if config.i3c_od_scl_hi_period_ns != 0 && config.i3c_od_scl_lo_period_ns != 0 {
+                (
+                    config.i3c_od_scl_hi_period_ns,
+                    config.i3c_od_scl_lo_period_ns,
+                )
+            } else {
+                (i2c_fmp_hi_ns, i2c_fmp_lo_ns)
+            };
+        self.i3c.i3cd0b4().write(|w| unsafe {
+            w.i3codhcnt()
+                .bits(ns_to_cnt_u8(od_hi_ns))
+                .i3codlcnt()
+                .bits(ns_to_cnt_u8(od_lo_ns))
+        });
 
         // I3C PP
-        let hcnt = config.i3c_pp_scl_hi_period_ns.div_ceil(config.core_period);
-        let lcnt = config.i3c_pp_scl_lo_period_ns.div_ceil(config.core_period);
+        let (i3c_pp_hi_ns, i3c_pp_lo_ns) =
+            if config.i3c_pp_scl_hi_period_ns != 0 && config.i3c_pp_scl_lo_period_ns != 0 {
+                (
+                    config.i3c_pp_scl_hi_period_ns,
+                    config.i3c_pp_scl_lo_period_ns,
+                )
+            } else {
+                let total_ns = NSEC_PER_SEC.div_ceil(config.i3c_scl_hz.max(1));
+                let hi_ns = core::cmp::min(I3C_BUS_THIGH_MAX_NS, total_ns.saturating_sub(1));
+                let lo_ns = total_ns.saturating_sub(hi_ns).max(1);
+                (hi_ns, lo_ns)
+            };
         self.i3c.i3cd0b8().write(|w| unsafe {
             w.i3cpphcnt()
-                .bits(u8::try_from(hcnt).unwrap_or(u8::MAX))
+                .bits(ns_to_cnt_u8(i3c_pp_hi_ns))
                 .i3cpplcnt()
-                .bits(u8::try_from(lcnt).unwrap_or(u8::MAX))
+                .bits(ns_to_cnt_u8(i3c_pp_lo_ns))
         });
 
         // SDA TX hold time
-        let mut lcnt: u32 = (config.sda_tx_hold_ns)
+        let hold_steps = (config.sda_tx_hold_ns)
             .div_ceil(config.core_period)
             .clamp(SDA_TX_HOLD_MIN, SDA_TX_HOLD_MAX);
+        let mut reg = self.i3c.i3cd0d0().read().bits();
+        reg = (reg & !SDA_TX_HOLD_MASK) | ((hold_steps & 0x7) << 16);
+        self.i3c.i3cd0d0().write(|w| unsafe { w.bits(reg) });
 
-        lcnt &= 0xfff8_ffff;
-        self.i3c.i3cd0d0().write(|w| unsafe { w.bits(lcnt) });
+        // BUS_FREE_TIMING
         self.i3c.i3cd0d4().write(|w| unsafe { w.bits(0xffff_007c) });
     }
 
@@ -1125,25 +1136,14 @@ impl<I3C: Instance, L: Logger> HardwareInterface for Ast1060I3c<I3C, L> {
                     .enbl_i3cctrl()
                     .set_bit()
             });
-            i3c_debug!(
-                self.logger,
-                "1 i3c i3cd000: {:#x}",
-                self.i3c.i3cd000().read().bits()
-            );
             let wait_cnt = &self.i3c.i3cd0d4().read().i3cibifree().bits();
             let wait_ns = u32::from(*wait_cnt) * config.core_period;
             let mut delay = DummyDelay {};
-            i3c_debug!(self.logger, "wait_ns: {}", wait_ns);
             delay.delay_ns(wait_ns * 100_u32);
             self.i3c_toggle_scl_in(8);
             if self.i3c.i3cd000().read().enbl_i3cctrl().bit_is_set() {
                 self.gen_internal_stop();
             }
-            i3c_debug!(
-                self.logger,
-                "2 i3c i3cd000: {:#x}",
-                self.i3c.i3cd000().read().bits()
-            );
             self.exit_sw_mode();
         } else {
             self.i3c.i3cd000().modify(|_, w| {
@@ -1181,22 +1181,6 @@ impl<I3C: Instance, L: Logger> HardwareInterface for Ast1060I3c<I3C, L> {
         modify_i3cg_reg1!(self, bus, |r, w| unsafe {
             w.bits(r.bits() | I3CG_REG1_SDA_IN_SW_MODE_VAL)
         });
-    }
-
-    fn i3c_bus_init(&mut self, config: &mut I3cConfig) {
-        i3c_debug!(self.logger, "i3c bus init");
-        let rc = ccc_rstact_all(self, config, CccRstActDefByte::CccRstActResetWholeTarget);
-        if let Ok(()) = rc {
-        } else {
-            let _ = ccc_rstact_all(self, config, CccRstActDefByte::CccRstActPeriphralOnly);
-            return;
-        }
-
-        let _ = ccc_rstdaa_all(self, config);
-        let events = I3C_CCC_EVT_ALL;
-        let _ = ccc_events_all_set(self, config, false, events);
-        let _ = ccc_events_all_set(self, config, true, I3C_CCC_EVT_HJ);
-        i3c_debug!(self.logger, "i3c bus init done");
     }
 
     fn even_parity(byte: u8) -> bool {
@@ -1398,7 +1382,6 @@ impl<I3C: Instance, L: Logger> HardwareInterface for Ast1060I3c<I3C, L> {
         let prev = config
             .curr_xfer
             .swap(core::ptr::from_mut(xfer).cast::<()>(), Ordering::AcqRel);
-        // debug_assert!(prev.is_null(), "previous xfer still in flight");
         if !prev.is_null() {
             i3c_debug!(self.logger, "start_xfer: previous xfer still in flight");
         }
@@ -1755,10 +1738,6 @@ impl<I3C: Instance, L: Logger> HardwareInterface for Ast1060I3c<I3C, L> {
             0 => Ok(()),
             _ => Err(I3cDrvError::Invalid),
         }
-    }
-
-    fn handle_unsolicited(&mut self, _config: &mut I3cConfig) {
-        // todo
     }
 
     fn priv_xfer_build_cmds<'a>(
@@ -2123,7 +2102,6 @@ impl<I3C: Instance, L: Logger> HardwareInterface for Ast1060I3c<I3C, L> {
             .target_data_done
             .wait_for_us(1_000_000_000, &mut delay)
         {
-            // C: wait master read timeout -> disable/reset/enable queues
             i3c_debug!(self.logger, "wait master read timeout! Reset queues");
             self.i3c_disable(config.is_secondary);
             self.reset_ctrl(RESET_CTRL_QUEUES);
