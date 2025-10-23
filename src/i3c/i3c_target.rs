@@ -54,7 +54,6 @@ impl<HW: HardwareInterface, L: crate::common::Logger> DynamicAddressable for I3c
 
 impl<HW: HardwareInterface, L: crate::common::Logger> IBICapable for I3cController<HW, L> {
     fn wants_ibi(&self) -> bool {
-        // In ast1060, we don't need to tell the controller that we want IBI
         true
     }
 

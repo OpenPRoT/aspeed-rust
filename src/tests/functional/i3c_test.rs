@@ -206,16 +206,27 @@ pub fn test_i3c_target(uart: &mut UartController<'_>) {
         c.i3c_pp_scl_lo_period_ns = 36;
         c.i3c_od_scl_hi_period_ns = 0;
         c.i3c_od_scl_lo_period_ns = 0;
-        c.sda_tx_hold_ns = 20;
+        c.sda_tx_hold_ns = 0;
+        // c.sda_tx_hold_ns = 20;
         c.dcr = 0xcc;
         c.target_config = Some(I3cTargetConfig::new(0, Some(0), 0xae));
     }
     let mut ibi_cons = i3c_ibi_workq_consumer(ctrl.hw.bus_num() as usize);
     ctrl.init();
-    let dyn_addr = 9;
+    let dyn_addr = 8;
     let dev_idx = 0;
     let _ = ctrl.hw.attach_i3c_dev(dev_idx, dyn_addr);
+    writeln!(
+        uart,
+        "I3C target dev at slot {dev_idx}, dyn addr {dyn_addr}\r"
+    )
+    .unwrap();
     // Dump I3C2 registers
+    // dump_i3c_controller_registers(uart, 0x7e7a_4000);
+    let mut delay = DummyDelay {};
+    delay.delay_ns(4_000_000_000);
+    writeln!(uart, "waiting for dynamic address assignment...\r").unwrap();
+    let _ = ctrl.hw.target_ibi_raise_hj(&mut ctrl.config);
     // dump_i3c_controller_registers(uart, 0x7e7a_4000);
     loop {
         if let Some(work) = ibi_cons.dequeue() {
@@ -254,9 +265,11 @@ pub fn test_i3c_target(uart: &mut UartController<'_>) {
             *b = u8::try_from(i).unwrap();
         }
         writeln!(uart, "send ibi #{ibi_count}\r").unwrap();
+        writeln!(uart, "[MASTER <== TARGET] TARGET WRITE: {data:02x?}").unwrap();
+        writeln!(uart, "\r").unwrap();
         ctrl.get_ibi_payload(&mut data).unwrap();
         ibi_count += 1;
-        if ibi_count > 100 {
+        if ibi_count > 10 {
             break;
         }
     }

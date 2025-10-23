@@ -439,6 +439,7 @@ pub trait HardwareInterface {
     fn handle_ibis(&mut self, config: &mut I3cConfig);
     fn i3c_aspeed_isr(&mut self, config: &mut I3cConfig);
     // target apis
+    fn target_ibi_raise_hj(&self, config: &mut I3cConfig) -> Result<(), I3cDrvError>;
     fn target_handle_response_ready(&mut self, config: &mut I3cConfig);
     fn target_pending_read_notify(
         &mut self,
@@ -1964,7 +1965,6 @@ impl<I3C: Instance, L: Logger> HardwareInterface for Ast1060I3c<I3C, L> {
             }
 
             if (status & INTR_RESP_READY_STAT) != 0 {
-                i3c_debug!(self.logger, "Response ready");
                 self.target_handle_response_ready(config);
             }
 
@@ -1985,6 +1985,25 @@ impl<I3C: Instance, L: Logger> HardwareInterface for Ast1060I3c<I3C, L> {
 
         self.i3c.i3cd03c().write(|w| unsafe { w.bits(status) });
         self.enable_irq();
+    }
+
+    fn target_ibi_raise_hj(&self, config: &mut I3cConfig) -> Result<(), I3cDrvError> {
+        if !config.is_secondary {
+            return Err(I3cDrvError::Invalid);
+        }
+        let hj_support = self.i3c.i3cd008().read().slvhjcap().bit();
+        if !hj_support {
+            return Err(I3cDrvError::Invalid);
+        }
+
+        let addr_valid = self.i3c.i3cd004().read().dynamic_addr_valid().bit();
+        if addr_valid {
+            return Err(I3cDrvError::Access);
+        }
+
+        self.i3c.i3cd038().write(|w| unsafe { w.bits(8) }); // set HJ request
+
+        Ok(())
     }
 
     fn target_handle_response_ready(&mut self, config: &mut I3cConfig) {
@@ -2022,7 +2041,11 @@ impl<I3C: Instance, L: Logger> HardwareInterface for Ast1060I3c<I3C, L> {
             if rx_len != 0 {
                 let mut buf: [u8; 256] = [0u8; 256];
                 self.rd_rx_fifo(&mut buf[..rx_len]);
-                i3c_debug!(self.logger, "Response data: {:02x?}", &buf[..rx_len]);
+                i3c_debug!(
+                    self.logger,
+                    "[MASTER ==> TARGET] TARGET READ: {:02x?}",
+                    &buf[..rx_len]
+                );
             }
 
             if tid == Tid::TargetIbi as usize {
@@ -2042,7 +2065,6 @@ impl<I3C: Instance, L: Logger> HardwareInterface for Ast1060I3c<I3C, L> {
         notifier: &mut I3cIbi,
     ) -> Result<(), I3cDrvError> {
         let reg = self.i3c.i3cd038().read().bits();
-        i3c_debug!(self.logger, "target_pending_read_notify: reg=0x{:08x}", reg);
         if !(config.sir_allowed_by_sw && (reg & SLV_EVENT_CTRL_SIR_EN != 0)) {
             return Err(I3cDrvError::Access);
         }
