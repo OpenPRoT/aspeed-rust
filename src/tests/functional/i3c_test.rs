@@ -38,6 +38,7 @@ pub fn dump_i3c_controller_registers(uart: &mut UartController<'_>, base: u32) {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn test_i3c_master(uart: &mut UartController<'_>) {
     let peripherals = unsafe { Peripherals::steal() };
     let mut delay = DummyDelay {};
@@ -147,7 +148,7 @@ pub fn test_i3c_master(uart: &mut UartController<'_>) {
                         0xde, 0xad, 0xbe, 0xef, 0xca, 0xfe, 0xba, 0xbe, 0x11, 0x22, 0x33, 0x44,
                         0x55, 0x66, 0x77, 0x88,
                     ];
-                    let tx_len = tx_buf.len() as u32;
+                    let tx_len = u32::try_from(tx_buf.len()).unwrap();
 
                     let mut tx_msgs = [I3cMsg {
                         buf: Some(&mut tx_buf[..]),
@@ -158,7 +159,7 @@ pub fn test_i3c_master(uart: &mut UartController<'_>) {
                         hdr_cmd_mode: 0,
                     }];
                     let _ = ctrl.hw.priv_xfer(&mut ctrl.config, known_pid, &mut tx_msgs);
-                    writeln!(uart, "[MASTER ==> TARGET]  MASTER WRITE: {:02x?}", tx_buf).unwrap();
+                    writeln!(uart, "[MASTER ==> TARGET]  MASTER WRITE: {tx_buf:02x?}").unwrap();
                     writeln!(uart, "\r").unwrap();
                 }
                 IbiWork::TargetDaAssignment => {
