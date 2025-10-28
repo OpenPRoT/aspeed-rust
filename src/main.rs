@@ -8,13 +8,12 @@ use core::sync::atomic::AtomicBool;
 use aspeed_ddk::uart::{Config, UartController};
 use aspeed_ddk::watchdog::WdtController;
 use ast1060_pac::Peripherals;
-use ast1060_pac::{Spipf, Wdt, Wdt1};
+use ast1060_pac::{Wdt, Wdt1};
 
 use aspeed_ddk::ecdsa::AspeedEcdsa;
 use aspeed_ddk::hace_controller::HaceController;
 use aspeed_ddk::rsa::AspeedRsa;
 use aspeed_ddk::spi;
-use aspeed_ddk::spimonitor::{RegionInfo, SpiMonitor, SpimExtMuxSel};
 use aspeed_ddk::syscon::{ClockId, ResetId, SysCon};
 use fugit::MillisDurationU32 as MilliSeconds;
 
@@ -102,51 +101,6 @@ fn test_wdt(uart: &mut UartController<'_>) {
     }
 }
 
-fn release_bmc_spi(uart: &mut UartController<'_>) {
-    uart.write_all(b"\r\n####### SPIM0 setup #######\r\n")
-        .unwrap();
-    let allow_cmds: [u8; 27] = [
-        0x03, 0x13, 0x0b, 0x0c, 0x6b, 0x6c, 0x01, 0x05, 0x35, 0x06, 0x04, 0x20, 0x21, 0x9f, 0x5a,
-        0xb7, 0xe9, 0x32, 0x34, 0xd8, 0xdc, 0x02, 0x12, 0x15, 0x31, 0x3b, 0x3c,
-    ];
-
-    let read_blocked_regions = [RegionInfo {
-        /*pfm*/
-        start: 0x0400_0000,
-        length: 0x0002_0000,
-    }];
-
-    let write_blocked_regions = [RegionInfo {
-        start: 0x0000_0000,
-        length: 0x0800_0000,
-    }];
-    let mut spi_monitor0 = SpiMonitor::<Spipf>::new(
-        true,
-        SpimExtMuxSel::SpimExtMuxSel1,
-        &allow_cmds,
-        u8::try_from(allow_cmds.len()).unwrap(),
-        &read_blocked_regions,
-        u8::try_from(read_blocked_regions.len()).unwrap(),
-        &write_blocked_regions,
-        u8::try_from(write_blocked_regions.len()).unwrap(),
-    );
-    spi_monitor0.spim_sw_rst();
-    spi_monitor0.aspeed_spi_monitor_init();
-    spi_monitor0.spim_ext_mux_config(SpimExtMuxSel::SpimExtMuxSel0);
-    // print spim pointer value
-}
-
-fn setup_bmc_sequence(uart_controller: &mut UartController) {
-    // Enable BMC flash power
-    gpio_test::test_gpio_flash_power(uart_controller);
-
-    // Release BMC SPI
-    release_bmc_spi(uart_controller);
-
-    // Release BMC Reset
-    gpio_test::test_gpio_bmc_reset(uart_controller);
-}
-
 #[no_mangle]
 pub static HALT: AtomicBool = AtomicBool::new(true);
 
@@ -230,7 +184,6 @@ fn main() -> ! {
     }
     // Initialize the peripherals here if needed
 
-    setup_bmc_sequence(&mut uart_controller);
     // Start SWMBX test
     #[cfg(feature = "i2c_target")]
     swmbx_test::test_swmbx(&mut uart_controller);

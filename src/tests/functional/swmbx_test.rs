@@ -1,12 +1,11 @@
 // Licensed under the Apache-2.0 license
 
-use crate::common::{DummyDelay, NoOpLogger, UartLogger};
+use crate::common::NoOpLogger;
 use crate::i2c::ast1060_i2c::Ast1060I2c;
 use crate::i2c::common::I2cConfigBuilder;
 use crate::i2c::i2c_controller::{HardwareInterface, I2cController};
 use crate::pinctrl;
-use crate::uart::{self, Config, UartController};
-use ast1060_pac::Peripherals;
+use crate::uart::UartController;
 use embedded_io::Write;
 
 use crate::i2c::pfr::swmbx;
@@ -16,8 +15,6 @@ use core::mem::MaybeUninit;
 use cortex_m::peripheral::NVIC;
 
 static mut SWMBX_TARGET: MaybeUninit<SwmbxI2CTarget> = MaybeUninit::uninit();
-static mut DBG_UART: MaybeUninit<UartController<'static>> = MaybeUninit::uninit();
-static mut DELAY: MaybeUninit<DummyDelay> = MaybeUninit::uninit();
 
 pub const UFM_WRITE_FIFO: u8 = 0xd;
 pub const UFM_READ_FIFO: u8 = 0xe;
@@ -32,7 +29,7 @@ static mut UART_PTR: Option<&'static mut UartController<'static>> = None;
 #[cfg(feature = "i2c_target")]
 static mut I2C_PTR: Option<
     &'static mut I2cController<
-        Ast1060I2c<ast1060_pac::I2c, SwmbxI2CTarget, UartLogger>,
+        Ast1060I2c<ast1060_pac::I2c, SwmbxI2CTarget, NoOpLogger>,
         NoOpLogger,
     >,
 > = None;
@@ -45,28 +42,6 @@ pub fn test_swmbx(uart: &mut UartController<'_>) {
         >(uart));
     }
     writeln!(uart, "\r\n####### SWMBX test #######\r\n").unwrap();
-
-    let p = unsafe { Peripherals::steal() };
-
-    let delay: &'static mut DummyDelay = unsafe {
-        DELAY.write(DummyDelay {});
-        &mut *DELAY.as_mut_ptr()
-    };
-
-    let dbg_uart: &'static mut UartController<'static> = unsafe {
-        DBG_UART.write(UartController::new(p.uart, delay));
-        &mut *DBG_UART.as_mut_ptr()
-    };
-    unsafe {
-        dbg_uart.init(&Config {
-            baud_rate: 115_200,
-            word_length: uart::WordLength::Eight as u8,
-            parity: uart::Parity::None,
-            stop_bits: uart::StopBits::One,
-            clock: 24_000_000,
-        });
-    }
-
     writeln!(uart, "\r\n## SWMBX: Starting up...\r\n").ok();
 
     let swmbx = SwmbxCtrl::init(swmbx::SWMBX_BUF_SIZE);
@@ -111,7 +86,7 @@ pub fn test_swmbx(uart: &mut UartController<'_>) {
     };
 
     let mut i2c0 = I2cController {
-        hardware: Ast1060I2c::new(UartLogger::new(dbg_uart)),
+        hardware: Ast1060I2c::new(NoOpLogger {}),
         config: I2cConfigBuilder::new().build(),
         logger: NoOpLogger {},
     };
@@ -123,11 +98,11 @@ pub fn test_swmbx(uart: &mut UartController<'_>) {
         pinctrl::Pinctrl::apply_pinctrl_group(pinctrl::PINCTRL_I2C0);
         I2C_PTR = Some(core::mem::transmute::<
             &mut I2cController<
-                Ast1060I2c<ast1060_pac::I2c, SwmbxI2CTarget, UartLogger>,
+                Ast1060I2c<ast1060_pac::I2c, SwmbxI2CTarget, NoOpLogger>,
                 NoOpLogger,
             >,
             &'static mut I2cController<
-                Ast1060I2c<ast1060_pac::I2c, SwmbxI2CTarget, UartLogger>,
+                Ast1060I2c<ast1060_pac::I2c, SwmbxI2CTarget, NoOpLogger>,
                 NoOpLogger,
             >,
         >(&mut i2c0));

@@ -381,7 +381,6 @@ impl SwmbxCtrl {
         }
 
         swmbx_log!("send_start port: {}, addr: {:#x}", port, addr);
-        swmbx_log!("mbx_en: {:#x}", self.mbx_en.get());
         if let Some(fifo_index) = self.check_fifo(addr) {
             self.mbx_fifo_execute[port] = true;
             self.mbx_fifo_addr[port] = addr;

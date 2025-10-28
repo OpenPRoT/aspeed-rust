@@ -1,6 +1,6 @@
 // Licensed under the Apache-2.0 license
 
-use crate::common::{NoOpLogger, UartLogger};
+use crate::common::Logger;
 use crate::i2c::ast1060_i2c::Ast1060I2c;
 use crate::i2c::common::{I2cConfigBuilder, I2cSpeed, I2cXferMode};
 use crate::i2c::i2c_controller::{HardwareInterface, I2cController};
@@ -79,7 +79,7 @@ impl I2CCoreTarget for SwmbxI2CTarget {
             TransactionDirection::Read => {
                 let ctrl = SwmbxCtrl::load_ctrl_ptr_mut();
                 let val = ctrl.get_msg(self.port, self.buffer_idx);
-                swmbx_target_log!("Read requested on port {}: val: {}", self.port, val);
+                swmbx_target_log!("Read requested on port {}: val: {:#02x}", self.port, val);
                 return Ok(Some(val));
             }
         }
@@ -104,7 +104,7 @@ impl ReadTarget for SwmbxI2CTarget {
         idx %= ctrl.buffer_size; // Ensure idx is within bounds
         self.buffer_idx = idx as u8;
         let _val = ctrl.get_msg(self.port, self.buffer_idx);
-        swmbx_target_log!("Read processed on port {}: val: {}", self.port, _val);
+        swmbx_target_log!("Read processed on port {}: val: {:#02x}", self.port, _val);
         Ok(1)
     }
 }
@@ -118,7 +118,7 @@ impl WriteTarget for SwmbxI2CTarget {
             return Ok(());
         }
 
-        swmbx_target_log!("Write received on port {}: data: {:?}", self.port, data);
+        swmbx_target_log!("Write received on port {}: data: {:02x?}", self.port, data);
         if self.first_write {
             self.buffer_idx = data[0];
             self.first_write = false;
@@ -164,13 +164,14 @@ impl SwmbxI2CTarget {
             port,
         })
     }
-    pub fn attach(
+    pub fn attach<LH, LC>(
         &mut self,
-        i2c: &mut I2cController<
-            Ast1060I2c<'static, ast1060_pac::I2c, SwmbxI2CTarget, UartLogger<'static>>,
-            NoOpLogger,
-        >,
-    ) -> Result<(), SwmbxI2CError> {
+        i2c: &mut I2cController<Ast1060I2c<'static, ast1060_pac::I2c, SwmbxI2CTarget, LH>, LC>,
+    ) -> Result<(), SwmbxI2CError>
+    where
+        LH: Logger,
+        LC: Logger,
+    {
         let mut config = I2cConfigBuilder::new()
             .xfer_mode(I2cXferMode::DmaMode)
             .multi_master(true)
