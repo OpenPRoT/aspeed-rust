@@ -14,6 +14,8 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use embedded_hal::delay::DelayNs;
 use embedded_hal::i2c::{NoAcknowledgeSource, Operation, SevenBitAddress};
 use proposed_traits::i2c_target::I2CTarget;
+#[cfg(feature = "i2c_target")]
+use proposed_traits::i2c_target::TransactionDirection;
 
 static I2CGLOBAL_INIT: AtomicBool = AtomicBool::new(false);
 
@@ -1348,7 +1350,14 @@ impl<'a, I2C: Instance, I2CT: I2CTarget, L: Logger> Ast1060I2c<'a, I2C, I2CT, L>
         if event == I2cSEvent::SlaveRdReq {
             i2c_debug!(self.logger, "read_requested");
             if let Some(target) = self.i2c_data.slave_target.as_mut() {
-                target.on_transaction_start(false);
+                if let Ok(Some(val)) =
+                    target.on_transaction_start(TransactionDirection::Read, false)
+                {
+                    if let Some(slice) = self.sdma_buf.as_mut_slice(0, 1).get_mut(0) {
+                        *slice = val;
+                        i2c_debug!(self.logger, "read_requested val {:#x}", val);
+                    }
+                }
             }
         } else if event == I2cSEvent::SlaveRdProc {
             i2c_debug!(self.logger, "read_processed");
@@ -1390,7 +1399,7 @@ impl<'a, I2C: Instance, I2CT: I2CTarget, L: Logger> Ast1060I2c<'a, I2C, I2CT, L>
             //if slave is ready to receive
             i2c_debug!(self.logger, "write_requested");
             if let Some(target) = self.i2c_data.slave_target.as_mut() {
-                target.on_transaction_start(false);
+                let _ = target.on_transaction_start(TransactionDirection::Write, false);
             }
         } else if event == I2cSEvent::SlaveWrRecvd {
             //Another I2C master has sent a byte to us which needs to be set in ‘val’
@@ -1440,7 +1449,7 @@ impl<'a, I2C: Instance, I2CT: I2CTarget, L: Logger> Ast1060I2c<'a, I2C, I2CT, L>
         if event == I2cSEvent::SlaveWrReq {
             i2c_debug!(self.logger, "byte write_requested");
             if let Some(target) = self.i2c_data.slave_target.as_mut() {
-                target.on_transaction_start(false);
+                let _ = target.on_transaction_start(TransactionDirection::Write, false);
             }
         } else if event == I2cSEvent::SlaveWrRecvd {
             i2c_debug!(self.logger, "byte write_received");
@@ -1454,7 +1463,18 @@ impl<'a, I2C: Instance, I2CT: I2CTarget, L: Logger> Ast1060I2c<'a, I2C, I2CT, L>
         if event == I2cSEvent::SlaveRdReq {
             i2c_debug!(self.logger, "byte read_requested");
             if let Some(target) = self.i2c_data.slave_target.as_mut() {
-                target.on_transaction_start(false);
+                match target.on_transaction_start(TransactionDirection::Read, false) {
+                    Ok(Some(v)) => {
+                        *val = v;
+                    }
+                    Ok(None) => {
+                        *val = 0;
+                    }
+                    Err(e) => {
+                        i2c_debug!(self.logger, "Failed on read_requested: {:?}", e);
+                        *val = 0;
+                    }
+                }
             }
         } else if event == I2cSEvent::SlaveRdProc {
             i2c_debug!(self.logger, "byte read_processed");
@@ -1660,6 +1680,7 @@ impl<'a, I2C: Instance, I2CT: I2CTarget, L: Logger> Ast1060I2c<'a, I2C, I2CT, L>
             cmd = SLAVE_TRIGGER_CMD;
             match self.xfer_mode {
                 I2cXferMode::DmaMode => {
+                    self.i2c.i2cs4c().write(|w| unsafe { w.bits(0) });
                     self.i2c.i2cs2c().modify(|_, w| unsafe {
                         w.dmarx_buf_len_byte()
                             .bits(u16::try_from(I2C_SLAVE_BUF_SIZE - 1).unwrap())

@@ -63,11 +63,14 @@ name = "aspeed-ddk"
 version = "0.1.0"
 dependencies = [
  "ast1060-pac",
+ "base64ct",
  "cortex-m",
  "cortex-m-rt",
+ "cortex-m-semihosting",
  "embedded-hal 1.0.0",
  "embedded-hal 1.0.0-alpha.1",
  "embedded-io",
+ "embedded-storage",
  "fugit",
  "heapless",
  "hex-literal",
@@ -108,6 +111,12 @@ checksum = "5deb64efa5bd81e31fcd1938615a6d98c82eafcbcd787162b6f63b91d6bac5b3"
 dependencies = [
  "rustc_version",
 ]
+
+[[package]]
+name = "base64ct"
+version = "1.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89e25b6adfb930f02d1981565a6e5d9c547ac15a96606256d3b59040e5cd4ca3"
 
 [[package]]
 name = "bitfield"
@@ -198,6 +207,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "cortex-m-semihosting"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c23234600452033cc77e4b761e740e02d2c4168e11dbf36ab14a0f58973592b0"
+dependencies = [
+ "cortex-m",
 ]
 
 [[package]]
@@ -376,7 +394,7 @@ dependencies = [
 [[package]]
 name = "proposed-traits"
 version = "0.1.0"
-source = "git+https://github.com/rusty1968/proposed_traits.git?rev=85641310df5a5276c67f81621b104322cff0286c#85641310df5a5276c67f81621b104322cff0286c"
+source = "git+https://github.com/stevenlee7189/proposed_traits.git?rev=496dba90a91aab8e4ae88bbaaa0e162df84ebe74#496dba90a91aab8e4ae88bbaaa0e162df84ebe74"
 dependencies = [
  "async-trait",
  "embedded-hal 1.0.0",

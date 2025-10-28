@@ -7,12 +7,10 @@ use crate::i2c::i2c_controller::{HardwareInterface, I2cController};
 use crate::pinctrl;
 use crate::uart::{self, Config, UartController};
 use ast1060_pac::Peripherals;
-#[cfg(feature = "i2c_target")]
-use cortex_m::peripheral::NVIC;
 use embedded_hal::i2c::ErrorKind;
 use embedded_io::Write;
 use proposed_traits::i2c_target::{
-    I2CCoreTarget, ReadTarget, RegisterAccess, WriteReadTarget, WriteTarget,
+    I2CCoreTarget, ReadTarget, RegisterAccess, TransactionDirection, WriteReadTarget, WriteTarget,
 };
 
 #[derive(Debug)]
@@ -44,7 +42,13 @@ impl I2CCoreTarget for DummyI2CTarget {
         self.address = address;
         Ok(())
     }
-    fn on_transaction_start(&mut self, _repeated: bool) {}
+    fn on_transaction_start(
+        &mut self,
+        _direction: TransactionDirection,
+        _repeated: bool,
+    ) -> Result<Option<u8>, Self::Error> {
+        Ok(None)
+    }
     fn on_stop(&mut self) {}
     fn on_address_match(&mut self, address: u8) -> bool {
         self.address == address
@@ -209,95 +213,5 @@ pub fn test_i2c_master(uart: &mut UartController<'_>) {
             )
             .unwrap();
         }
-    }
-}
-
-#[cfg(feature = "i2c_target")]
-static mut UART_PTR: Option<&'static mut UartController<'static>> = None;
-#[cfg(feature = "i2c_target")]
-static mut I2C0_INSTANCE: Option<
-    I2cController<Ast1060I2c<ast1060_pac::I2c, DummyI2CTarget, UartLogger>, NoOpLogger>,
-> = None;
-
-#[cfg(feature = "i2c_target")]
-#[no_mangle]
-pub extern "C" fn i2c() {
-    unsafe {
-        if let Some(uart) = UART_PTR.as_mut() {
-            let _ = uart.write_all(b"[ISR] i2c0\r\n");
-        }
-        if let Some(i2c0) = I2C0_INSTANCE.as_mut() {
-            let () = i2c0.hardware.handle_interrupt();
-        }
-    }
-}
-
-#[cfg(feature = "i2c_target")]
-static mut TEST_TARGET: DummyI2CTarget = DummyI2CTarget {
-    address: 0x42,
-    buffer: [0; 16],
-    read_idx: 0,
-};
-#[cfg(feature = "i2c_target")]
-pub fn test_i2c_slave(uart: &mut UartController<'_>) {
-    writeln!(uart, "\r\n####### I2C slave test #######\r\n").unwrap();
-
-    let peripherals = unsafe { Peripherals::steal() };
-    let mut delay = DummyDelay {};
-    unsafe {
-        let mut dbg_uart = UartController::new(
-            peripherals.uart,
-            core::mem::transmute::<&mut DummyDelay, &'static mut DummyDelay>(&mut delay),
-        );
-
-        dbg_uart.init(&Config {
-            baud_rate: 115_200,
-            word_length: uart::WordLength::Eight as u8,
-            parity: uart::Parity::None,
-            stop_bits: uart::StopBits::One,
-            clock: 24_000_000,
-        });
-
-        let i2c_config = I2cConfigBuilder::new()
-            .xfer_mode(I2cXferMode::DmaMode)
-            .multi_master(true)
-            .smbus_timeout(true)
-            .smbus_alert(false)
-            .speed(I2cSpeed::Standard)
-            .build();
-        //on DC-SCM board, i2c0 of ast1060 is connected to i2c4 of ast2600
-        let mut i2c0: I2cController<
-            Ast1060I2c<ast1060_pac::I2c, DummyI2CTarget, UartLogger>,
-            NoOpLogger,
-        > = I2cController {
-            hardware: Ast1060I2c::new(UartLogger::new(core::mem::transmute::<
-                &mut UartController<'_>,
-                &'static mut UartController<'static>,
-            >(&mut dbg_uart))),
-            config: i2c_config,
-            logger: NoOpLogger {},
-        };
-
-        pinctrl::Pinctrl::apply_pinctrl_group(pinctrl::PINCTRL_I2C0);
-        i2c0.hardware.init(&mut i2c0.config);
-
-        match i2c0
-            .hardware
-            .i2c_aspeed_slave_register(TEST_TARGET.address, None)
-        {
-            Ok(val) => {
-                writeln!(uart, "i2c slave register ok: {val:?}\r").unwrap();
-            }
-            Err(e) => {
-                writeln!(uart, "i2c slave register err: {e:?}\r").unwrap();
-            }
-        }
-
-        UART_PTR = Some(core::mem::transmute::<
-            &mut UartController<'_>,
-            &'static mut UartController<'static>,
-        >(uart));
-        I2C0_INSTANCE = Some(i2c0);
-        NVIC::unmask(ast1060_pac::Interrupt::i2c);
     }
 }
