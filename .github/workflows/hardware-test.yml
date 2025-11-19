@@ -1,0 +1,423 @@
+# Licensed under the Apache-2.0 license
+
+# Hardware-in-the-Loop Testing Workflow
+#
+# This workflow runs in two stages:
+#
+# Stage 1: precommit-checks (ubuntu-22.04)
+#   • Checkout code
+#   • Install packages  
+#   • Verify Cargo.lock
+#   • Run cargo xtask precommit (format/lint/build)
+#   • Upload bloat reports
+#
+# Stage 2: hardware-functional-tests (self-hosted with AST1060)
+#   • Checkout code
+#   • Install Rust toolchain
+#   • Build firmware with test features
+#   • Generate binary image
+#   • Power off board
+#   • Upload firmware via UART (following AST1060 UART boot flow)
+#   • Power cycle for normal boot
+#   • Monitor test execution via UART
+#   • Parse results (PASS/FAIL/SKIP)
+#   • Upload test logs
+#
+# Hardware tests only run if precommit checks pass (needs: precommit-checks)
+# Can be triggered manually with test suite selection (hmac, hash, rsa, ecdsa, all)
+#
+# Workflow Diagram:
+#
+#   ┌─────────────────────────────────────────────┐
+#   │ Stage 1: precommit-checks                   │
+#   │ Runner: ubuntu-22.04 (GitHub-hosted)        │
+#   ├─────────────────────────────────────────────┤
+#   │ • Verify Cargo.lock                         │
+#   │ • cargo xtask precommit                     │
+#   │ • Upload bloat reports                      │
+#   └──────────────────┬──────────────────────────┘
+#                      │
+#                      │ (only if passes)
+#                      ▼
+#   ┌─────────────────────────────────────────────┐
+#   │ Stage 2: hardware-functional-tests          │
+#   │ Runner: self-hosted (with AST1060)          │
+#   ├─────────────────────────────────────────────┤
+#   │ • Build firmware (release profile)          │
+#   │ • Generate binary                           │
+#   │ • UART upload to AST1060                    │
+#   │ • Monitor test execution                    │
+#   │ • Parse PASS/FAIL/SKIP results              │
+#   │ • Upload test logs                          │
+#   └─────────────────────────────────────────────┘
+#
+# AST1060 UART Upload Flow:
+#   1. Power off device
+#   2. Enable FWSPICK strap (J156 pins 1-2 or SW6 pin 3)
+#   3. Execute uart_fw_py command
+#   4. Power on device (while uart_fw is running)
+#   5. uart_fw uploads firmware to flash
+#   6. Remove FWSPICK strap
+#   7. Power cycle for normal boot
+#   8. Monitor UART output for test results
+
+name: Hardware-in-the-Loop Functional Tests
+
+on:
+  push:
+    branches:
+      - main
+      - ci-hil
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run (hmac, hash, rsa, ecdsa, all)'
+        required: false
+        default: 'all'
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  EXTRA_CARGO_CONFIG: "target.'cfg(all())'.rustflags = [\"-Dwarnings\"]"
+  UART_BAUDRATE: 921600
+  UART_PORT: /dev/ttyUSB0  # Adjust for your CI runner
+  AST1060_PLATFORM: ast1060
+
+jobs:
+  # First stage: Build checks on standard CI runner
+  precommit-checks:
+    runs-on: ubuntu-22.04
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install packages
+        run: |
+          sudo apt-get update -qy
+          sudo apt-get install -qy build-essential curl gcc-multilib gcc-riscv64-unknown-elf git
+          
+      - name: Install cargo-bloat
+        run: cargo install cargo-bloat
+
+      - name: Verify Cargo.lock is up to date
+        run: |
+          cargo tree --locked > /dev/null || (
+            echo "Please update Cargo.lock"
+            cargo tree
+            git diff Cargo.lock
+            exit 1
+          )
+
+      - name: Run precommit checks (build/format/lint)
+        run: |
+          cargo --config "$EXTRA_CARGO_CONFIG" xtask precommit
+
+      - name: Upload binary size reports
+        uses: actions/upload-artifact@v4
+        if: always() && hashFiles('target/bloat-reports/*') != ''
+        with:
+          name: bloat-reports
+          path: target/bloat-reports/
+          retention-days: 30
+
+  # Second stage: Hardware tests on self-hosted runner with AST1060
+  hardware-functional-tests:
+    needs: precommit-checks
+    runs-on: self-hosted  # Must be self-hosted runner with AST1060 hardware
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2024-09-17
+          target: thumbv7em-none-eabihf
+          override: true
+          components: rust-src, clippy
+
+      - name: Install dependencies
+        run: |
+          # Install required tools
+          sudo apt-get update -qy
+          sudo apt-get install -qy build-essential python3 python3-serial gcc-arm-none-eabi
+          
+          # Install UART firmware upload tool (adjust path as needed)
+          # Assuming uart_fw_py is in your repo or available
+          if [ ! -f ./scripts/uart_fw_py ]; then
+            echo "Error: uart_fw_py not found in scripts/"
+            exit 1
+          fi
+          chmod +x ./scripts/uart_fw_py
+
+      - name: Build functional test firmware
+        run: |
+          # Determine test suite features
+          SUITE="${{ github.event.inputs.test_suite || 'all' }}"
+          
+          if [ "$SUITE" = "all" ]; then
+            FEATURES="test-hmac,test-hash,test-rsa,test-ecdsa"
+          else
+            FEATURES="test-$SUITE"
+          fi
+          
+          echo "Building with features: $FEATURES"
+          cargo build --release --target thumbv7em-none-eabihf --features "$FEATURES"
+
+      - name: Generate binary image
+        run: |
+          # Convert ELF to raw binary
+          arm-none-eabi-objcopy \
+            -O binary \
+            target/thumbv7em-none-eabihf/release/aspeed-ddk \
+            target/functional-tests-raw.bin
+          
+          # Wrap with UART boot header (4-byte size prefix)
+          ./scripts/gen_uart_booting_image.sh \
+            target/functional-tests-raw.bin \
+            target/functional-tests.bin
+          
+          # Verify binary sizes
+          RAW_SIZE=$(stat -c%s target/functional-tests-raw.bin)
+          UART_SIZE=$(stat -c%s target/functional-tests.bin)
+          echo "Raw binary size: $RAW_SIZE bytes"
+          echo "UART boot image size: $UART_SIZE bytes (includes 4-byte header)"
+          
+          if [ $RAW_SIZE -gt 1048576 ]; then
+            echo "Error: Binary too large for 1MB flash"
+            exit 1
+          fi
+
+      - name: Prepare hardware - Power off
+        run: |
+          echo "Powering off AST1060 board..."
+          # Add your power control command here (e.g., PDU control, GPIO, etc.)
+          # Example: ./scripts/power_control.sh off
+          sleep 2
+
+      - name: Check UART port availability
+        run: |
+          if [ ! -e "$UART_PORT" ]; then
+            echo "Error: UART port $UART_PORT not found"
+            echo "Available ports:"
+            ls -la /dev/ttyUSB* /dev/ttyACM* 2>/dev/null || echo "No USB serial ports found"
+            exit 1
+          fi
+          
+          # Ensure port is not in use
+          sudo fuser -k $UART_PORT 2>/dev/null || true
+          sleep 1
+
+      - name: Verify FWSPICK strap (manual check)
+        run: |
+          echo "======================================"
+          echo "HARDWARE CHECK REQUIRED:"
+          echo "Ensure FWSPICK is connected to VCC_3V3"
+          echo "  - AST1060 EVB: J156 pins 1-2 connected"
+          echo "  - DC-SCM: SW6 pin 3 ON"
+          echo "======================================"
+          
+          # In a real CI setup, you'd have automated strap control
+          # For now, this is a documentation step
+          # You could add a GPIO-controlled relay here
+
+      - name: Upload firmware via UART
+        run: |
+          echo "Starting UART firmware upload..."
+          echo "Command will wait for power-on..."
+          
+          # Run UART upload in background
+          sudo ./scripts/uart_fw_py \
+            --platform $AST1060_PLATFORM \
+            --spi 0 \
+            --cs 0 \
+            --comport $UART_PORT \
+            --baudrate $UART_BAUDRATE \
+            --input_image target/functional-tests.bin \
+            --erase_all &
+          
+          UART_PID=$!
+          
+          # Give uart_fw time to initialize
+          sleep 3
+          
+          # Power on the board
+          echo "Powering on AST1060 board..."
+          # Add your power control command here
+          # Example: ./scripts/power_control.sh on
+          
+          # Wait for UART upload to complete
+          wait $UART_PID
+          UPLOAD_STATUS=$?
+          
+          if [ $UPLOAD_STATUS -ne 0 ]; then
+            echo "Error: UART firmware upload failed with exit code $UPLOAD_STATUS"
+            exit 1
+          fi
+          
+          echo "Firmware upload completed successfully"
+
+      - name: Remove FWSPICK strap (manual or automated)
+        run: |
+          echo "======================================"
+          echo "HARDWARE ACTION REQUIRED:"
+          echo "Remove FWSPICK connection"
+          echo "  - AST1060 EVB: Disconnect J156 pins"
+          echo "  - DC-SCM: Turn OFF SW6 pin 3"
+          echo "======================================"
+          
+          # In automated setup, control via GPIO/relay
+          sleep 2
+
+      - name: Power cycle board for normal boot
+        run: |
+          echo "Power cycling for normal boot..."
+          
+          # Power off
+          # ./scripts/power_control.sh off
+          sleep 2
+          
+          # Power on
+          # ./scripts/power_control.sh on
+          sleep 5
+          
+          echo "Board booted in normal mode"
+
+      - name: Monitor test execution via UART
+        run: |
+          echo "Monitoring test execution..."
+          
+          # Capture UART output for test results
+          timeout 60 sudo python3 - <<'EOF'
+import serial
+import sys
+import re
+
+port = "${{ env.UART_PORT }}"
+baudrate = 115200  # Tests run at standard baud after boot
+
+try:
+    ser = serial.Serial(port, baudrate, timeout=1)
+    print(f"Listening on {port} at {baudrate} baud...")
+    
+    test_results = {
+        'passed': 0,
+        'failed': 0,
+        'skipped': 0
+    }
+    
+    output_buffer = []
+    
+    while True:
+        line = ser.readline().decode('utf-8', errors='ignore').strip()
+        if not line:
+            continue
+            
+        output_buffer.append(line)
+        print(line)
+        
+        # Parse test results
+        if 'PASS' in line:
+            test_results['passed'] += 1
+        elif 'FAIL' in line:
+            test_results['failed'] += 1
+        elif 'SKIP' in line:
+            test_results['skipped'] += 1
+        
+        # Check for completion
+        if 'Test Suite' in line and 'Complete' in line:
+            break
+        if 'panic' in line.lower():
+            print("ERROR: Panic detected!")
+            sys.exit(1)
+    
+    # Print summary
+    print("\n" + "="*50)
+    print("Test Results Summary:")
+    print(f"  Passed:  {test_results['passed']}")
+    print(f"  Failed:  {test_results['failed']}")
+    print(f"  Skipped: {test_results['skipped']}")
+    print("="*50)
+    
+    # Exit with appropriate code
+    if test_results['failed'] > 0:
+        sys.exit(1)
+    else:
+        sys.exit(0)
+        
+except serial.SerialException as e:
+    print(f"Serial port error: {e}")
+    sys.exit(1)
+except KeyboardInterrupt:
+    print("Monitoring interrupted")
+    sys.exit(1)
+finally:
+    if 'ser' in locals():
+        ser.close()
+EOF
+          
+          TEST_STATUS=$?
+          
+          if [ $TEST_STATUS -ne 0 ]; then
+            echo "Tests FAILED or monitoring error"
+            exit 1
+          fi
+          
+          echo "All tests PASSED"
+
+      - name: Save test logs
+        if: always()
+        run: |
+          # Save logs for analysis
+          mkdir -p test-results
+          
+          # Capture final UART output
+          timeout 5 sudo python3 -c "
+import serial
+import sys
+with serial.Serial('${{ env.UART_PORT }}', 115200, timeout=1) as ser:
+    for _ in range(50):
+        line = ser.readline().decode('utf-8', errors='ignore')
+        if line:
+            print(line, end='')
+" > test-results/uart-output.log 2>&1 || true
+          
+          echo "Test logs saved to test-results/"
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_number }}
+          path: |
+            test-results/
+            target/functional-tests.bin
+          retention-days: 30
+
+      - name: Cleanup
+        if: always()
+        run: |
+          # Ensure board is in normal state
+          # ./scripts/power_control.sh off
+          sudo fuser -k $UART_PORT 2>/dev/null || true
+          echo "Cleanup completed"
+
+      - name: Report status
+        if: always()
+        run: |
+          if [ ${{ job.status }} == 'success' ]; then
+            echo "✅ Hardware tests PASSED"
+          else
+            echo "❌ Hardware tests FAILED"
+            exit 1
+          fi
