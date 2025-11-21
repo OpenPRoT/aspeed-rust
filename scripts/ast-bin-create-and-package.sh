@@ -15,12 +15,14 @@ usage() {
     echo "  -b, --binary NAME          Binary name (default: aspeed-ddk)"
     echo "  -o, --output OUTPUT        Output binary path (default: target/functional-tests.bin)"
     echo "  -s, --max-size SIZE        Maximum binary size in bytes (default: 1048576)"
+    echo "  -q, --quiet                Suppress informational output"
     echo "  -h, --help                 Show this help message"
     echo ""
     echo "EXAMPLES:"
     echo "  $0                                    # Use defaults"
     echo "  $0 -b my-firmware -o my-firmware.bin # Custom binary name and output"
     echo "  $0 -s 2097152                        # Allow 2MB max size"
+    echo "  $0 -q                                # Run silently"
 }
 
 # Default values
@@ -28,6 +30,14 @@ TARGET="thumbv7em-none-eabihf"
 BINARY_NAME="aspeed-ddk"
 OUTPUT_PATH="target/functional-tests.bin"
 MAX_SIZE=1048576  # 1MB default
+QUIET=false
+
+# Helper function for conditional echo
+log() {
+    if [[ "$QUIET" != "true" ]]; then
+        echo "$@"
+    fi
+}
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -47,6 +57,10 @@ while [[ $# -gt 0 ]]; do
         -s|--max-size)
             MAX_SIZE="$2"
             shift 2
+            ;;
+        -q|--quiet)
+            QUIET=true
+            shift
             ;;
         -h|--help)
             usage
@@ -73,13 +87,13 @@ cd "$PROJECT_ROOT"
 ELF_PATH="target/$TARGET/release/$BINARY_NAME"
 RAW_BINARY_PATH="target/functional-tests-raw.bin"
 
-echo "AST1060 Binary Generation"
-echo "========================="
-echo "Target: $TARGET"
-echo "Binary: $BINARY_NAME"
-echo "Output: $OUTPUT_PATH"
-echo "Max size: $MAX_SIZE bytes"
-echo ""
+log "AST1060 Binary Generation"
+log "========================="
+log "Target: $TARGET"
+log "Binary: $BINARY_NAME"
+log "Output: $OUTPUT_PATH"
+log "Max size: $MAX_SIZE bytes"
+log ""
 
 # Check if ELF file exists
 if [[ ! -f "$ELF_PATH" ]]; then
@@ -96,7 +110,7 @@ if ! command -v arm-none-eabi-objcopy >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "Converting ELF to raw binary..."
+log "Converting ELF to raw binary..."
 
 # Convert ELF to raw binary
 if ! arm-none-eabi-objcopy \
@@ -115,7 +129,7 @@ fi
 
 # Get raw binary size
 RAW_SIZE=$(stat -c%s "$RAW_BINARY_PATH")
-echo "Raw binary size: $RAW_SIZE bytes"
+log "Raw binary size: $RAW_SIZE bytes"
 
 # Check size limits
 if [[ $RAW_SIZE -gt $MAX_SIZE ]]; then
@@ -127,13 +141,13 @@ if [[ $RAW_SIZE -gt $MAX_SIZE ]]; then
     exit 1
 fi
 
-echo "Wrapping with UART boot header..."
+log "Wrapping with UART boot header..."
 
 # Check if UART boot image generator exists
 UART_BOOT_SCRIPT="$SCRIPT_DIR/gen_uart_booting_image.sh"
 if [[ ! -f "$UART_BOOT_SCRIPT" ]]; then
     echo "Error: UART boot image generator not found at $UART_BOOT_SCRIPT"
-    echo "Creating simple 4-byte size prefix wrapper..."
+    log "Creating simple 4-byte size prefix wrapper..."
     
     # Create simple wrapper if script doesn't exist
     # Write 4-byte little-endian size prefix followed by binary data
@@ -144,6 +158,7 @@ import sys
 raw_path = '$RAW_BINARY_PATH'
 output_path = '$OUTPUT_PATH'
 max_size = $MAX_SIZE
+quiet = '$QUIET' == 'true'
 
 try:
     with open(raw_path, 'rb') as f:
@@ -160,10 +175,11 @@ try:
         # Write binary data
         f.write(data)
     
-    print(f'Created UART boot image: {output_path}')
-    print(f'Header size: 4 bytes')
-    print(f'Payload size: {size} bytes')
-    print(f'Total size: {size + 4} bytes')
+    if not quiet:
+        print(f'Created UART boot image: {output_path}')
+        print(f'Header size: 4 bytes')
+        print(f'Payload size: {size} bytes')
+        print(f'Total size: {size + 4} bytes')
 
 except Exception as e:
     print(f'Error creating UART boot image: {e}')
@@ -186,20 +202,20 @@ fi
 # Get final sizes
 UART_SIZE=$(stat -c%s "$OUTPUT_PATH")
 
-echo ""
-echo "Binary generation completed successfully!"
-echo "========================================"
-echo "Raw binary: $RAW_BINARY_PATH ($RAW_SIZE bytes)"
-echo "UART image: $OUTPUT_PATH ($UART_SIZE bytes)"
-echo "Header overhead: $((UART_SIZE - RAW_SIZE)) bytes"
+log ""
+log "Binary generation completed successfully!"
+log "========================================"
+log "Raw binary: $RAW_BINARY_PATH ($RAW_SIZE bytes)"
+log "UART image: $OUTPUT_PATH ($UART_SIZE bytes)"
+log "Header overhead: $((UART_SIZE - RAW_SIZE)) bytes"
 
 # Calculate utilization
 UTILIZATION=$((RAW_SIZE * 100 / MAX_SIZE))
-echo "Flash utilization: $UTILIZATION% of ${MAX_SIZE} bytes"
+log "Flash utilization: $UTILIZATION% of ${MAX_SIZE} bytes"
 
 if [[ $UTILIZATION -gt 90 ]]; then
-    echo "Warning: Flash utilization is high (>90%)"
+    log "Warning: Flash utilization is high (>90%)"
 fi
 
-echo ""
-echo "Ready for UART upload to AST1060!"
+log ""
+log "Ready for UART upload to AST1060!"
