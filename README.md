@@ -81,32 +81,17 @@ $ cargo build --release
 
 The recommended host platform is a Raspberry Pi, per ASpeed. Connecting two GPIO from the Pi to SRST pin 1 and FWSPICK pin 2 will allow the upload script to manage UART boot state and device ready. Check the upload script for the correct pins.
 
-### TIO
+### Test Execution
 
-TIO is used as a multiplexer to allow observing returned data streams while other applications write.
+Using the UART boot image created above, the uart-test-exec.py script will load the binary on the device and monitor all output.
 
-1. Clone https://github.com/tio/tio.git and follow its build instructions. Ensure HEAD is 3af4c559 or newer.
+$ python3 ./scripts/uart-test-exec.py <path to UART> uart_ast10x0.bin
 
-### Run
+The script will toggle the GPIOs in the necessary order to reset the device into UART boot mode, then once "U" is observed from the device, it will upload the binary and begin observing the output. All test output will be printed to the screen and logged for later use.
 
-1. Run TIO:
-   ```
-   ./build/src/tio -S unix:/tmp/tio-socket-ast1060 <path to your UART device>
-   ```
+Running
 
-2. Run the upload script
-   ```
-   aspeed-rust $ ./scripts/ast-uart-fw.sh UNIX-CONNECT:/tmp/tio-socket-ast1060 uart_ast10x0.bin
-   ```
-   The upload may take a while due to the size of the binary. On the TIO terminal you should see:
+$ pythone3 ./scripts/uart-test-exec.py --help
 
-   ```
-   UP0c0
-   Hello, world!!
-
-
-   aspeed_ddk::hash::Sha256...
-   ```
-
-   As the test begins executing.
+will provide details on multiple additional options including manual toggling of GPIOs, altering the GPIO number, and other configuration options (UART baud rate, timeouts, quiet operation, etc.)
 
