@@ -187,7 +187,7 @@ pub fn test_read_jedec<D: SpiNorDevice<Error = E>, E>(uart: &mut UartController<
             astdebug::print_array_u8(uart, &id);
         }
         _ => {
-            test_log!(uart, "Error:: Failed to read JEDEC ID");
+            test_log!(uart, "Error:: Failed to read JEDEC ID (FAIL)");
         }
     }
 }
@@ -282,9 +282,9 @@ pub fn test_cs<D: SpiNorDevice<Error = E>, E>(
                 == core::slice::from_raw_parts(ptr_read, len);
         }
         if result {
-            test_log!(uart, "read write test passed!");
+            test_log!(uart, "read write test PASS!");
         } else {
-            test_log!(uart, "ERROR:: read write test failed!!");
+            test_log!(uart, "ERROR:: read write test FAIL!!");
             test_log!(uart, "write buffer:");
             astdebug::print_array_u8(uart, wbuf);
             test_log!(uart, "read buffer:");
@@ -448,10 +448,10 @@ pub fn test_spi(uart: &mut UartController<'_>) {
         match flash_device.nor_read_jedec_id() {
             Ok(id) => match NorFlashBlockDevice::from_jedec_id(flash_device, id) {
                 Ok(mut blockdev) => test_block_device::<_>(&mut blockdev),
-                Err(_e) => test_log!(uart, "start block device using jedec id failed"),
+                Err(_e) => test_log!(uart, "start block device using jedec id failed (FAIL)"),
             },
             _ => {
-                test_log!(uart, "Error:: Failed to read JEDEC ID");
+                test_log!(uart, "Error:: Failed to read JEDEC ID (FAIL)");
             }
         }
     } else {
@@ -591,8 +591,8 @@ pub fn test_block_device<T: SpiNorDevice>(blockdev: &mut NorFlashBlockDevice<T>)
         testsize
     );
     match blockdev.program(norflashblockdevice::BlockAddrUsize(addr), wbuf) {
-        Ok(()) => test_log!(uartc, "program successful"),
-        Err(_e) => test_log!(uartc, "program failed"),
+        Ok(()) => test_log!(uartc, "program PASS"),
+        Err(_e) => test_log!(uartc, "program FAIL"),
     }
 
     let _ = blockdev.read(norflashblockdevice::BlockAddrUsize(addr), rbuf);
@@ -603,9 +603,9 @@ pub fn test_block_device<T: SpiNorDevice>(blockdev: &mut NorFlashBlockDevice<T>)
             == core::slice::from_raw_parts(ptr_read, testsize);
     }
     if result {
-        test_log!(uartc, "read write test passed!");
+        test_log!(uartc, "read write test passed (PASS)!");
     } else {
-        test_log!(uartc, "ERROR:: read write test failed!!");
+        test_log!(uartc, "ERROR:: read write test failed (FAIL)!!");
         test_log!(uartc, "write buffer:");
         astdebug::print_array_u8(&mut uartc, wbuf);
         test_log!(uartc, "read buffer:");

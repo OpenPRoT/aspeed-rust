@@ -34,24 +34,24 @@ pub fn test_gpioa(uart: &mut UartController<'_>) {
     let mut pa3 = gpioa.pa3.into_open_drain_output::<Floating>();
     pa3.set_low().unwrap();
     if pa3.is_set_low().unwrap() {
-        uart.write_all(b"\rGPIOA pin3 set low successfully\r\n")
+        uart.write_all(b"\rGPIOA pin3 set low successfully (PASS)\r\n")
             .unwrap();
     }
     pa3.set_high().unwrap();
     if pa3.is_set_high().unwrap() {
-        uart.write_all(b"\rGPIOA pin3 set high successfully\r\n")
+        uart.write_all(b"\rGPIOA pin3 set high successfully (PASS)\r\n")
             .unwrap();
     }
 
     let mut pa4 = gpioa.pa4.into_push_pull_output();
     pa4.set_low().unwrap();
     if pa4.is_set_low().unwrap() {
-        uart.write_all(b"\rGPIOA pin4 set low successfully\r\n")
+        uart.write_all(b"\rGPIOA pin4 set low successfully (PASS)\r\n")
             .unwrap();
     }
     pa4.set_high().unwrap();
     if pa4.is_set_high().unwrap() {
-        uart.write_all(b"\rGPIOA pin4 set high successfully\r\n")
+        uart.write_all(b"\rGPIOA pin4 set high successfully (PASS)\r\n")
             .unwrap();
     }
 }
@@ -90,12 +90,12 @@ pub fn test_gpio_bmc_reset(uart: &mut UartController<'_>) {
         let mut pm5 = gpiom.pm5.into_push_pull_output();
         pm5.set_low().unwrap();
         if pm5.is_set_low().unwrap() {
-            uart.write_all(b"\r\nGPIOM pin5 set low successfully\r\n")
+            uart.write_all(b"\r\nGPIOM pin5 set low successfully (PASS)\r\n")
                 .unwrap();
         }
         pm5.set_high().unwrap();
         if pm5.is_set_high().unwrap() {
-            uart.write_all(b"\r\nGPIOM pin5 set high successfully\r\n")
+            uart.write_all(b"\r\nGPIOM pin5 set high successfully (PASS)\r\n")
                 .unwrap();
         }
     }
@@ -111,12 +111,12 @@ pub fn test_gpio_bmc_reset(uart: &mut UartController<'_>) {
         let mut ph2 = gpioh.ph2.into_push_pull_output();
         ph2.set_low().unwrap();
         if ph2.is_set_low().unwrap() {
-            uart.write_all(b"\r\nGPIOH pin2 set low successfully\r\n")
+            uart.write_all(b"\r\nGPIOH pin2 set low successfully (PASS)\r\n")
                 .unwrap();
         }
         ph2.set_high().unwrap();
         if ph2.is_set_high().unwrap() {
-            uart.write_all(b"\r\nGPIOH pin2 set high successfully\r\n")
+            uart.write_all(b"\r\nGPIOH pin2 set high successfully (PASS)\r\n")
                 .unwrap();
         }
     }

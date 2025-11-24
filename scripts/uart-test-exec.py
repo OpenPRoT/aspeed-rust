@@ -317,7 +317,7 @@ class UartTestExecutor:
                         test_results['skipped'] += 1
                     
                     # Check for completion or failure
-                    if 'Test Suite' in line and 'Complete' in line:
+                    if 'COMPLETE' in line:
                         self.log(f"\nTest execution completed!")
                         self.log(f"Results: {test_results}")
                         return test_results['failed'] == 0
