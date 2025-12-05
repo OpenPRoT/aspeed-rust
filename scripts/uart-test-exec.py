@@ -380,6 +380,9 @@ Examples:
   
   # Custom pin numbers and timeout
   ./uart-test-exec.py --srst-pin 25 --fwspick-pin 20 --test-timeout 300 /dev/ttyUSB0 firmware.bin
+
+  # Upload-only (no GPIO, no monitoring)
+  ./uart-test-exec.py --upload-only /dev/ttyUSB0 firmware.bin
         """
     )
     
@@ -420,13 +423,21 @@ Examples:
                        help="Run silently (no output)")
     parser.add_argument("--dry-run", action="store_true",
                        help="Show what would be done without executing")
-    
+    # NEW: upload-only mode (no GPIO, no monitoring)
+    parser.add_argument("--upload-only", action="store_true",
+                       help="Skip all GPIO commands, open UART, upload firmware, then exit")
+
     args = parser.parse_args()
     
     # Validate arguments
-    if not any([args.manual_srst, args.manual_fwspick, args.sequence, args.uart_device]):
-        parser.error("Must specify either manual GPIO control, sequence, or UART device")
-    
+    # NEW: validation for upload-only mode
+    if args.upload_only:
+        if not args.uart_device or not args.firmware:
+            parser.error("--upload-only requires UART device and firmware file")
+    else:
+        if not any([args.manual_srst, args.manual_fwspick, args.sequence, args.uart_device]):
+            parser.error("Must specify either manual GPIO control, sequence, or UART device")
+
     if args.uart_device and not args.skip_uart and not Path(args.uart_device).exists():
         parser.error(f"UART device not found: {args.uart_device}")
     
@@ -443,6 +454,15 @@ Examples:
             state = "dh" if args.manual_fwspick in ['high', 'dh'] else "dl"
             executor.toggle_fwspick(state)
             return 0
+
+        # NEW: upload-only execution path (no GPIO, no monitoring)
+        if args.upload_only:
+            if not executor.open_serial():
+                return 1
+            # Directly upload firmware, skip GPIO and waiting/monitoring
+            ok = executor.upload_firmware()
+            executor.cleanup()
+            return 0 if ok else 1
         
         # Handle sequence operations
         if args.sequence == 'fwspick-mode':
