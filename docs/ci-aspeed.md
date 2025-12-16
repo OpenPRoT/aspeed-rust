@@ -147,4 +147,11 @@ When using a Github runner, it is recommended that the following things be set i
 - SRST GPIO pin
 - FWSPICK GPIO pin
 
-The last two can be overridden on the command-line, allowing the script to operate automatically against multiple devices connected to the same Raspberry Pi.
+### Variables
+
+The YAML is configured to key on 3 variables for basic test config. These variables must be set on the runner.
+* TARGET_UART - Path to the UART device attached to the DUT.
+* FWSPICK_PIN - A number that corresponds to the GPIO pin to be toggled to control FWSPICK
+* SRST_PIN - A number that corresponds to the GPIO pin to be toggled to control SRST
+
+If FWSPICK_PIN is not set or is zero length, the script will assume the default pin settings are acceptable.
