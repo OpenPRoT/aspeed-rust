@@ -107,9 +107,9 @@ pub fn run_ecdsa_tests(
         writeln!(uart, "\r\nTest case {i}... ").unwrap();
 
         let _ = match (result.is_ok(), vec.result) {
-            (true, true) => writeln!(uart, "\rresult expected (pass), Pass"),
-            (false, false) => writeln!(uart, "\rresult expected (fail), Pass"),
-            _ => writeln!(uart, "\rresult unexpected (got {result:?}), Failed"),
+            (true, true) => writeln!(uart, "\rresult expected (pass), PASS"),
+            (false, false) => writeln!(uart, "\rresult expected (fail), PASS"),
+            _ => writeln!(uart, "\rresult unexpected (got {result:?}), FAIL"),
         };
     }
 }

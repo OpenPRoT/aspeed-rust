@@ -1,0 +1,172 @@
+# Licensed under the Apache-2.0 license
+
+# Hardware-in-the-Loop Testing Workflow
+#
+# This workflow runs in two stages:
+#
+# Stage 1: precommit-checks (ubuntu-22.04)
+#   • Checkout code
+#   • Install packages  
+#   • Verify Cargo.lock
+#   • Run cargo xtask precommit (format/lint/build)
+#   • Upload bloat reports
+#
+# Stage 2: hardware-functional-tests (self-hosted with AST1060)
+#   • Checkout code
+#   • Install Rust toolchain
+#   • Build firmware with test features
+#   • Generate binary image
+#   • Power off board
+#   • Upload firmware via UART (following AST1060 UART boot flow)
+#   • Power cycle for normal boot
+#   • Monitor test execution via UART
+#   • Parse results (PASS/FAIL/SKIP)
+#   • Upload test logs
+#
+# Hardware tests only run if precommit checks pass (needs: precommit-checks)
+# Can be triggered manually with test suite selection (hmac, hash, rsa, ecdsa, all)
+#
+# Workflow Diagram:
+#
+#   ┌─────────────────────────────────────────────┐
+#   │ Stage 1: precommit-checks                   │
+#   │ Runner: ubuntu-22.04 (GitHub-hosted)        │
+#   ├─────────────────────────────────────────────┤
+#   │ • Verify Cargo.lock                         │
+#   │ • cargo xtask precommit                     │
+#   │ • Upload bloat reports                      │
+#   └──────────────────┬──────────────────────────┘
+#                      │
+#                      │ (only if passes)
+#                      ▼
+#   ┌─────────────────────────────────────────────┐
+#   │ Stage 2: hardware-functional-tests          │
+#   │ Runner: self-hosted (with AST1060)          │
+#   ├─────────────────────────────────────────────┤
+#   │ • Build firmware (release profile)          │
+#   │ • Generate binary                           │
+#   │ • UART upload to AST1060                    │
+#   │ • Monitor test execution                    │
+#   │ • Parse PASS/FAIL/SKIP results              │
+#   │ • Upload test logs                          │
+#   └─────────────────────────────────────────────┘
+#
+# AST1060 UART Upload Flow:
+#   1. Power off device
+#   2. Enable FWSPICK strap (J156 pins 1-2 or SW6 pin 3)
+#   3. Execute uart_fw_py command
+#   4. Power on device (while uart_fw is running)
+#   5. uart_fw uploads firmware to flash
+#   6. Remove FWSPICK strap
+#   7. Power cycle for normal boot
+#   8. Monitor UART output for test results
+
+name: Hardware-in-the-Loop Functional Tests
+
+on:
+  push:
+    branches:
+      - main
+      - ci-hil
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run (hmac, hash, rsa, ecdsa, all)'
+        required: false
+        default: 'all'
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  EXTRA_CARGO_CONFIG: "target.'cfg(all())'.rustflags = [\"-Dwarnings\"]"
+  UART_BAUDRATE: 921600
+  UART_PORT: /dev/ttyUSB0  # Adjust for your CI runner
+  AST1060_PLATFORM: ast1060
+
+jobs:
+  # First stage: Build checks on standard CI runner
+  precommit-checks:
+    runs-on: ubuntu-22.04
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install packages
+        run: |
+          sudo apt-get update -qy
+          sudo apt-get install -qy build-essential curl gcc-multilib gcc-riscv64-unknown-elf git
+          
+      - name: Install cargo-bloat
+        run: cargo install cargo-bloat
+
+      - name: Verify Cargo.lock is up to date
+        run: |
+          cargo tree --locked > /dev/null || (
+            echo "Please update Cargo.lock"
+            cargo tree
+            git diff Cargo.lock
+            exit 1
+          )
+
+      - name: Run precommit checks (build/format/lint)
+        run: |
+          cargo --config "$EXTRA_CARGO_CONFIG" xtask precommit
+
+      - name: Upload binary size reports
+        uses: actions/upload-artifact@v4
+        if: always() && hashFiles('target/bloat-reports/*') != ''
+        with:
+          name: bloat-reports
+          path: target/bloat-reports/
+          retention-days: 30
+
+  # Second stage: Hardware tests on self-hosted runner with AST1060
+  hardware-functional-tests:
+    needs: precommit-checks
+    runs-on: self-hosted  # Must be self-hosted runner with AST1060 hardware
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2024-09-17
+          target: thumbv7em-none-eabihf
+          override: true
+          components: rust-src, clippy
+
+      - name: Install dependencies
+        run: |
+          # Install required tools
+          sudo apt-get update -qy
+          sudo apt-get install -qy build-essential python3 python3-serial gcc-arm-none-eabi
+
+      - name: Build functional test firmware
+        run: |
+          cargo build 
+
+      - name: Generate binary image
+        run: |
+          cargo objcopy -- -O binary ast10x0.bin
+          ./scripts/gen_uart_booting_image.sh ast10x0.bin uart_ast10x0.bin
+
+      - name: Upload and Run
+        if: ${{ env.FWSPICK_GPIO == ''}}
+        run: |
+          python3 ./uart-test-exec.py ${{ env.TARGET_UART }} uart_ast10x0.bin
+
+      - name: Upload and Run Custom
+        if: ${{ env.FWSPICK_GPIO != ''}}
+        run: |
+          python3 ./uart-test-exec.py --fwsck-pin ${{ env.FWSCK_PIN }} --srst-pin ${{ env.SRST_PIN }} ${{ env.TARGET_UART }} uart_ast10x0.bin --fwsck-ind

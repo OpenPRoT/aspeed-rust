@@ -177,10 +177,10 @@ fn validate_digest(
     }
 
     if matches && byte_index == expected.len() {
-        writeln!(uart, "{algorithm} test vector validation: PASSED ✅").unwrap();
+        writeln!(uart, "{algorithm} test vector validation: PASS").unwrap();
         true
     } else {
-        writeln!(uart, "{algorithm} test vector validation: FAILED ❌").unwrap();
+        writeln!(uart, "{algorithm} test vector validation: FAIL").unwrap();
         write!(uart, "Expected: ").unwrap();
         for &byte in expected {
             write!(uart, "{byte:02x}").unwrap();
@@ -226,9 +226,9 @@ fn test_owned_sha256(uart: &mut UartController<'_>, hace: ast1060_pac::Hace) {
     ];
 
     if validate_digest(&digest.value, &expected_sha256, "SHA256", uart) {
-        writeln!(uart, "SHA256 owned API: PASSED ✅").unwrap();
+        writeln!(uart, "SHA256 owned API: PASS").unwrap();
     } else {
-        writeln!(uart, "SHA256 owned API: FAILED ❌").unwrap();
+        writeln!(uart, "SHA256 owned API: FAIL").unwrap();
     }
 }
 
@@ -254,9 +254,9 @@ fn test_owned_sha384(uart: &mut UartController<'_>, hace: ast1060_pac::Hace) {
     ];
 
     if validate_digest(&digest.value, &expected_sha384, "SHA384", uart) {
-        writeln!(uart, "SHA384 owned API: PASSED ✅").unwrap();
+        writeln!(uart, "SHA384 owned API: PASS").unwrap();
     } else {
-        writeln!(uart, "SHA384 owned API: FAILED ❌").unwrap();
+        writeln!(uart, "SHA384 owned API: FAIL").unwrap();
     }
 
     // Demonstrate controller recovery by using it again
@@ -264,7 +264,7 @@ fn test_owned_sha384(uart: &mut UartController<'_>, hace: ast1060_pac::Hace) {
     let context2 = context2.update(b"Reused controller").unwrap();
     let (_digest2, _final_controller) = context2.finalize().unwrap();
 
-    writeln!(uart, "Controller recovery: PASSED ✅").unwrap();
+    writeln!(uart, "Controller recovery: PASS").unwrap();
 }
 
 /// Test owned SHA512 API demonstrating cancellation
@@ -278,7 +278,7 @@ fn test_owned_sha512(uart: &mut UartController<'_>, hace: ast1060_pac::Hace) {
     // Demonstrate cancellation - returns controller without computing digest
     let recovered_controller = context.cancel();
 
-    writeln!(uart, "SHA512 cancellation: PASSED ✅").unwrap();
+    writeln!(uart, "SHA512 cancellation: PASS").unwrap();
 
     // Use recovered controller for actual computation with known test vector
     // Test with known test vector: "abc" -> SHA512
@@ -300,9 +300,9 @@ fn test_owned_sha512(uart: &mut UartController<'_>, hace: ast1060_pac::Hace) {
     ];
 
     if validate_digest(&digest.value, &expected_sha512, "SHA512", uart) {
-        writeln!(uart, "SHA512 owned API: PASSED ✅").unwrap();
+        writeln!(uart, "SHA512 owned API: PASS").unwrap();
     } else {
-        writeln!(uart, "SHA512 owned API: FAILED ❌").unwrap();
+        writeln!(uart, "SHA512 owned API: FAIL").unwrap();
     }
 }
 
@@ -372,6 +372,9 @@ fn main() -> ! {
         gpio_test::test_gpio_flash_power(&mut uart_controller);
         spi::spitest::test_spi2(&mut uart_controller);
     }
+
+    writeln!(uart_controller, "\r\nCOMPLETE\r\n").unwrap();
+
     // Initialize the peripherals here if needed
     loop {
         cortex_m::asm::wfi();

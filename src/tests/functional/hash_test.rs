@@ -93,9 +93,9 @@ where
 
     if let Some(expected) = expected {
         if output.as_ref() == expected {
-            writeln!(uart, "\r\n{}: Test passed!", core::any::type_name::<A>()).unwrap();
+            writeln!(uart, "\r\n{}: Test PASS", core::any::type_name::<A>()).unwrap();
         } else {
-            writeln!(uart, "\r\n{}: Test failed!", core::any::type_name::<A>()).unwrap();
+            writeln!(uart, "\r\n{}: Test FAIL", core::any::type_name::<A>()).unwrap();
             writeln!(uart, "Expected:").unwrap();
             print_hex_array(uart, expected, 16);
             writeln!(uart, "Got:").unwrap();

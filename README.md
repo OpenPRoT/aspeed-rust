@@ -74,3 +74,24 @@ $ cargo build --release
    Hello, world!
    aspeed_ddk!
    ```
+
+## Running the app on Hardware
+
+### Host Platform
+
+The recommended host platform is a Raspberry Pi, per ASpeed. Connecting two GPIO from the Pi to SRST pin 1 and FWSPICK pin 2 will allow the upload script to manage UART boot state and device ready. Check the upload script for the correct pins.
+
+### Test Execution
+
+Using the UART boot image created above, the uart-test-exec.py script will load the binary on the device and monitor all output.
+
+$ python3 ./scripts/uart-test-exec.py <path to UART> uart_ast10x0.bin
+
+The script will toggle the GPIOs in the necessary order to reset the device into UART boot mode, then once "U" is observed from the device, it will upload the binary and begin observing the output. All test output will be printed to the screen and logged for later use.
+
+Running
+
+$ pythone3 ./scripts/uart-test-exec.py --help
+
+will provide details on multiple additional options including manual toggling of GPIOs, altering the GPIO number, and other configuration options (UART baud rate, timeouts, quiet operation, etc.)
+

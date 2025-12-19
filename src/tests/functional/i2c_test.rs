@@ -112,8 +112,8 @@ pub fn test_i2c_master(uart: &mut UartController<'_>) {
         .smbus_alert(false)
         .speed(I2cSpeed::Standard)
         .build();
-    let mut i2c1: I2cController<
-        Ast1060I2c<ast1060_pac::I2c1, DummyI2CTarget, UartLogger>,
+    let mut i2c2: I2cController<
+        Ast1060I2c<ast1060_pac::I2c2, DummyI2CTarget, UartLogger>,
         NoOpLogger,
     > = I2cController {
         hardware: Ast1060I2c::new(UartLogger::new(&mut dbg_uart)),
@@ -121,26 +121,26 @@ pub fn test_i2c_master(uart: &mut UartController<'_>) {
         logger: NoOpLogger {},
     };
 
-    pinctrl::Pinctrl::apply_pinctrl_group(pinctrl::PINCTRL_I2C1);
-    i2c1.hardware.init(&mut i2c1.config);
+    pinctrl::Pinctrl::apply_pinctrl_group(pinctrl::PINCTRL_I2C2);
+    i2c2.hardware.init(&mut i2c2.config);
 
     let addr = 0x2e; //device ADT7490
     let mut buf = [0x4e];
     if true {
-        match i2c1.hardware.write(addr, &buf) {
+        match i2c2.hardware.write(addr, &buf) {
             Ok(val) => {
-                writeln!(uart, "i2c write ok: {val:?}\r").unwrap();
+                writeln!(uart, "i2c write PASS: {val:?}\r").unwrap();
             }
             Err(e) => {
-                writeln!(uart, "i2c write err: {e:?}\r").unwrap();
+                writeln!(uart, "i2c write FAIL: {e:?}\r").unwrap();
             }
         }
-        match i2c1.hardware.read(addr, &mut buf) {
+        match i2c2.hardware.read(addr, &mut buf) {
             Ok(val) => {
-                writeln!(uart, "i2c read ok: {val:?}\r").unwrap();
+                writeln!(uart, "i2c read PASS: {val:?}\r").unwrap();
             }
             Err(e) => {
-                writeln!(uart, "i2c read err: {e:?}\r").unwrap();
+                writeln!(uart, "i2c read FAIL: {e:?}\r").unwrap();
             }
         }
         writeln!(uart, "after read data {:#x}, expected: 0x81\r\n", buf[0]).unwrap();
@@ -150,20 +150,20 @@ pub fn test_i2c_master(uart: &mut UartController<'_>) {
         let mut buf = [0x0];
         for (i, &off) in reg_addr.iter().enumerate() {
             buf[0] = off;
-            match i2c1.hardware.write(addr, &buf) {
+            match i2c2.hardware.write(addr, &buf) {
                 Ok(val) => {
-                    writeln!(uart, "i2c write ok: {val:?}\r").unwrap();
+                    writeln!(uart, "i2c write PASS: {val:?}\r").unwrap();
                 }
                 Err(e) => {
-                    writeln!(uart, "i2c write err: {e:?}\r").unwrap();
+                    writeln!(uart, "i2c write FAIL: {e:?}\r").unwrap();
                 }
             }
-            match i2c1.hardware.read(addr, &mut buf) {
+            match i2c2.hardware.read(addr, &mut buf) {
                 Ok(val) => {
-                    writeln!(uart, "i2c read ok: {val:?}\r").unwrap();
+                    writeln!(uart, "i2c read PASS: {val:?}\r").unwrap();
                 }
                 Err(e) => {
-                    writeln!(uart, "i2c read err: {e:?}\r").unwrap();
+                    writeln!(uart, "i2c read FAIL: {e:?}\r").unwrap();
                 }
             }
             writeln!(
@@ -176,30 +176,30 @@ pub fn test_i2c_master(uart: &mut UartController<'_>) {
         if false {
             writeln!(uart, "########### write 0x3 to offset 0x82 \r\n").unwrap();
             let buf2 = [0x82, 0x3];
-            match i2c1.hardware.write(addr, &buf2) {
+            match i2c2.hardware.write(addr, &buf2) {
                 Ok(val) => {
-                    writeln!(uart, "i2c write ok: {val:?}\r").unwrap();
+                    writeln!(uart, "i2c write PASS: {val:?}\r").unwrap();
                 }
                 Err(e) => {
-                    writeln!(uart, "i2c write err: {e:?}\r").unwrap();
+                    writeln!(uart, "i2c write FAIL: {e:?}\r").unwrap();
                 }
             }
             buf[0] = 0x82;
             writeln!(uart, "########### read 0x82 \r\n").unwrap();
-            match i2c1.hardware.write(addr, &buf) {
+            match i2c2.hardware.write(addr, &buf) {
                 Ok(val) => {
-                    writeln!(uart, "i2c write ok: {val:?}\r").unwrap();
+                    writeln!(uart, "i2c write PASS: {val:?}\r").unwrap();
                 }
                 Err(e) => {
-                    writeln!(uart, "i2c write err: {e:?}\r").unwrap();
+                    writeln!(uart, "i2c write FAIL: {e:?}\r").unwrap();
                 }
             }
-            match i2c1.hardware.read(addr, &mut buf) {
+            match i2c2.hardware.read(addr, &mut buf) {
                 Ok(val) => {
-                    writeln!(uart, "i2c read ok: {val:?}\r").unwrap();
+                    writeln!(uart, "i2c read PASS: {val:?}\r").unwrap();
                 }
                 Err(e) => {
-                    writeln!(uart, "i2c read err: {e:?}\r").unwrap();
+                    writeln!(uart, "i2c read FAIL: {e:?}\r").unwrap();
                 }
             }
             writeln!(
@@ -286,10 +286,10 @@ pub fn test_i2c_slave(uart: &mut UartController<'_>) {
             .i2c_aspeed_slave_register(TEST_TARGET.address, None)
         {
             Ok(val) => {
-                writeln!(uart, "i2c slave register ok: {val:?}\r").unwrap();
+                writeln!(uart, "i2c slave register PASS: {val:?}\r").unwrap();
             }
             Err(e) => {
-                writeln!(uart, "i2c slave register err: {e:?}\r").unwrap();
+                writeln!(uart, "i2c slave register FAIL: {e:?}\r").unwrap();
             }
         }
 

@@ -90,10 +90,10 @@ where
                     continue;
                 }
 
-                writeln!(uart, "\rRSA vector[{i}] sign passed").ok();
+                writeln!(uart, "\rRSA vector[{i}] sign PASS").ok();
             }
             Err(_err) => {
-                writeln!(uart, "\rRSA vector[{i}] sign failed").ok();
+                writeln!(uart, "\rRSA vector[{i}] sign FAIL").ok();
             }
         }
     }
@@ -170,10 +170,10 @@ where
 
         match result {
             Ok(_decrypted) => {
-                writeln!(uart, "\rRSA vector[{i}] verify passed").ok();
+                writeln!(uart, "\rRSA vector[{i}] verify PASS").ok();
             }
             Err(err) => {
-                writeln!(uart, "\rRSA vector[{i}] verify failed: {err:?}").ok();
+                writeln!(uart, "\rRSA vector[{i}] verify FAIL: {err:?}").ok();
             }
         }
     }
