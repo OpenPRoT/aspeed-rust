@@ -1,4 +1,5 @@
 #!/bin/bash
+# Licensed under the Apache-2.0 license
 set -euo pipefail
 
 # AST1060 Binary Creation and Packaging Script
