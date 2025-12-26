@@ -59,6 +59,7 @@
 mod constants;
 mod controller;
 mod error;
+mod hal_impl;
 mod master;
 mod recovery;
 mod slave;
@@ -71,3 +72,6 @@ pub use constants::*;
 pub use controller::Ast1060I2c;
 pub use error::I2cError;
 pub use types::*;
+
+// Re-export HAL implementations for external use
+pub use hal_impl::*;
