@@ -22,6 +22,7 @@ use aspeed_ddk::tests::functional::gpio_test;
 use aspeed_ddk::tests::functional::hash_test::run_hash_tests;
 use aspeed_ddk::tests::functional::hmac_test::run_hmac_tests;
 use aspeed_ddk::tests::functional::i2c_test;
+use aspeed_ddk::tests::functional::otp_test;
 use aspeed_ddk::tests::functional::rsa_test::run_rsa_tests;
 use aspeed_ddk::tests::functional::timer_test::run_timer_tests;
 use panic_halt as _;
@@ -363,6 +364,10 @@ fn main() -> ! {
     i2c_test::test_i2c_slave(&mut uart_controller);
     test_wdt(&mut uart_controller);
     run_timer_tests(&mut uart_controller);
+
+    if false {
+        otp_test::test_otp(&mut uart_controller);
+    }
 
     let test_spicontroller = false;
     if test_spicontroller {

@@ -10,6 +10,7 @@ pub mod hash;
 pub mod hash_owned;
 pub mod hmac;
 pub mod i2c;
+pub mod otp;
 pub mod pinctrl;
 pub mod rsa;
 pub mod spi;
