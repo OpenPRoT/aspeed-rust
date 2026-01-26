@@ -46,3 +46,6 @@ zerocopy = { version = "0.8.25", features = ["derive"] }
 cortex-m-rt = { version = "0.7.5", features = ["device"] }
 panic-halt = "1.0.0"
 
+[patch."https://github.com/AspeedTech-BMC/ast1060-pac.git"]
+ast1060-pac = { path = "ast1060-pac" }
+
