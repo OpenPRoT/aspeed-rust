@@ -39,6 +39,114 @@ impl From<u8> for Controller {
     }
 }
 
+/// Clock configuration for I2C timing calculations
+///
+/// This struct decouples the I2C driver from direct SCU/I2C global register access,
+/// enabling:
+/// - Unit testing without hardware
+/// - Portability across different board configurations
+/// - Clear ownership boundaries between system initialization and peripheral drivers
+///
+/// # Usage
+///
+/// For typical AST1060 configurations, use `ClockConfig::ast1060_default()`.
+/// For custom configurations or testing, construct directly.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use aspeed_ddk::i2c_core::ClockConfig;
+///
+/// // Use default AST1060 configuration (50 MHz APB)
+/// let clocks = ClockConfig::ast1060_default();
+///
+/// // Or read from hardware during system init
+/// let clocks = ClockConfig::from_hardware();
+/// ```
+#[derive(Debug, Clone, Copy)]
+pub struct ClockConfig {
+    /// APB bus clock frequency in Hz
+    pub apb_clock_hz: u32,
+    /// Base clock 1 frequency in Hz (for Fast-plus mode, ~20 MHz)
+    pub base_clk1_hz: u32,
+    /// Base clock 2 frequency in Hz (for Fast mode, ~10 MHz)
+    pub base_clk2_hz: u32,
+    /// Base clock 3 frequency in Hz (for Standard mode, ~2.77 MHz)
+    pub base_clk3_hz: u32,
+    /// Base clock 4 frequency in Hz (for recovery timeout)
+    pub base_clk4_hz: u32,
+}
+
+impl ClockConfig {
+    /// HPLL frequency (1 GHz) used for APB clock derivation
+    const HPLL_FREQ: u32 = 1_000_000_000;
+
+    /// Default AST1060 clock configuration
+    ///
+    /// Based on typical AST1060 configuration with:
+    /// - APB clock: 50 MHz (HPLL / 20)
+    /// - I2CG10 register: 0x6222_0803
+    ///
+    /// This can be used when the actual hardware configuration matches
+    /// these defaults, or for testing purposes.
+    pub const fn ast1060_default() -> Self {
+        // APB = 50 MHz (HPLL / ((9+1) * 2))
+        // I2CG10 = 0x6222_0803:
+        //   base_clk1 divisor = 0x03 → 50M / ((3+2)/2) = 20 MHz
+        //   base_clk2 divisor = 0x08 → 50M / ((8+2)/2) = 10 MHz
+        //   base_clk3 divisor = 0x22 → 50M / ((34+2)/2) = 2.77 MHz
+        //   base_clk4 divisor = 0x62 → 50M / ((98+2)/2) = 1 MHz
+        Self {
+            apb_clock_hz: 50_000_000,
+            base_clk1_hz: 20_000_000,
+            base_clk2_hz: 10_000_000,
+            base_clk3_hz: 2_770_000,
+            base_clk4_hz: 1_000_000,
+        }
+    }
+
+    /// Read clock configuration from hardware registers
+    ///
+    /// This reads the actual APB clock divider from SCU and the I2C base
+    /// clock dividers from I2C global registers.
+    ///
+    /// # Safety
+    ///
+    /// This function accesses SCU and I2C global registers. It should be
+    /// called during system initialization when these peripherals are
+    /// properly configured.
+    pub fn from_hardware() -> Self {
+        // Read APB clock from SCU
+        let scu = unsafe { &*ast1060_pac::Scu::ptr() };
+        let apb_divider = u32::from(scu.scu310().read().apbbus_pclkdivider_sel().bits());
+        let apb_clock_hz = Self::HPLL_FREQ / ((apb_divider + 1) * 2);
+
+        // Read base clock dividers from I2C global registers
+        let i2cg = unsafe { &*ast1060_pac::I2cglobal::ptr() };
+        let i2cg10 = i2cg.i2cg10().read();
+
+        // Formula: base_clk = APB * 10 / ((divisor + 2) * 10 / 2)
+        let calc_base = |divisor: u8| -> u32 {
+            let divisor_u32 = u32::from(divisor);
+            (apb_clock_hz * 10) / ((divisor_u32 + 2) * 10 / 2)
+        };
+
+        Self {
+            apb_clock_hz,
+            base_clk1_hz: calc_base(i2cg10.base_clk1divisor_basedivider1().bits()),
+            base_clk2_hz: calc_base(i2cg10.base_clk2divisor_basedivider2().bits()),
+            base_clk3_hz: calc_base(i2cg10.base_clk3divisor_basedivider3().bits()),
+            base_clk4_hz: calc_base(i2cg10.base_clk4divisor_basedivider4().bits()),
+        }
+    }
+}
+
+impl Default for ClockConfig {
+    fn default() -> Self {
+        Self::ast1060_default()
+    }
+}
+
 /// I2C controller configuration
 pub struct I2cController<'a> {
     pub controller: Controller,
@@ -64,6 +172,8 @@ pub struct I2cConfig {
     pub smbus_timeout: bool,
     /// Enable SMBus alert interrupt
     pub smbus_alert: bool,
+    /// Clock configuration for timing calculations
+    pub clock_config: ClockConfig,
 }
 
 impl Default for I2cConfig {
@@ -74,6 +184,20 @@ impl Default for I2cConfig {
             multi_master: false,
             smbus_timeout: true,
             smbus_alert: false,
+            clock_config: ClockConfig::default(),
+        }
+    }
+}
+
+impl I2cConfig {
+    /// Create configuration with hardware-detected clocks
+    ///
+    /// This is a convenience constructor that reads clock configuration
+    /// from hardware registers.
+    pub fn with_hardware_clocks() -> Self {
+        Self {
+            clock_config: ClockConfig::from_hardware(),
+            ..Default::default()
         }
     }
 }
