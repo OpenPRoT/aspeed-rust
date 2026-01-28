@@ -201,6 +201,17 @@ impl<'a> Ast1060I2c<'a> {
 }
 
 /// Initialize I2C global registers (one-time init)
+///
+/// # Design Note: AtomicBool Guard
+///
+/// The `AtomicBool` prevents re-initialization if `new()` is called multiple times
+/// (e.g., initializing I2C1 then I2C2). However, with the `from_initialized()` pattern
+/// where apps pre-configure hardware in `main.rs` before kernel start, this code path
+/// is rarely taken in production.
+///
+/// The atomic generates `ldrexb/strexb` sequences plus memory barriers, adding ~50 bytes.
+/// Consider moving global init to a public utility function that apps call explicitly,
+/// which would eliminate the need for runtime guards entirely.
 fn init_i2c_global() {
     use core::sync::atomic::{AtomicBool, Ordering};
     static I2CGLOBAL_INIT: AtomicBool = AtomicBool::new(false);
