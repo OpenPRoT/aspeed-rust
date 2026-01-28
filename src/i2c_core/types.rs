@@ -186,6 +186,7 @@ pub struct I2cController<'a> {
 /// - Fast mode (400 kHz) - standard MCTP speed
 /// - Buffer mode - efficient for MCTP packet transfers
 /// - `SMBus` timeout enabled - required for robust MCTP operation
+/// - Clock config read from hardware - assumes app pre-configured I2CG10
 #[derive(Debug, Clone, Copy)]
 pub struct I2cConfig {
     /// Transfer mode (byte-by-byte or buffer)
@@ -203,6 +204,11 @@ pub struct I2cConfig {
 }
 
 impl Default for I2cConfig {
+    /// Create default I2C configuration reading clocks from hardware
+    ///
+    /// The application must pre-configure I2C global clocks (I2CG10)
+    /// before creating an I2C driver instance. This default reads
+    /// the actual clock values from hardware registers.
     fn default() -> Self {
         Self {
             xfer_mode: I2cXferMode::BufferMode,
@@ -210,21 +216,28 @@ impl Default for I2cConfig {
             multi_master: false,
             smbus_timeout: true,
             smbus_alert: false,
-            clock_config: ClockConfig::default(),
+            clock_config: ClockConfig::from_hardware(),
         }
     }
 }
 
 impl I2cConfig {
-    /// Create configuration with hardware-detected clocks
+    /// Create configuration with static default clocks (for testing)
     ///
-    /// This is a convenience constructor that reads clock configuration
-    /// from hardware registers.
+    /// Uses hardcoded AST1060 default clock values. Prefer `default()`
+    /// which reads actual values from hardware.
     #[must_use]
-    pub fn with_hardware_clocks() -> Self {
+    pub fn with_static_clocks() -> Self {
         Self {
-            clock_config: ClockConfig::from_hardware(),
-            ..Default::default()
+            clock_config: ClockConfig::ast1060_default(),
+            ..Self {
+                xfer_mode: I2cXferMode::BufferMode,
+                speed: I2cSpeed::Fast,
+                multi_master: false,
+                smbus_timeout: true,
+                smbus_alert: false,
+                clock_config: ClockConfig::ast1060_default(),
+            }
         }
     }
 }

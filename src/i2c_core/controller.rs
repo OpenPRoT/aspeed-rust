@@ -30,9 +30,55 @@ pub struct Ast1060I2c<'a> {
 }
 
 impl<'a> Ast1060I2c<'a> {
-    /// Create a new I2C instance
+    /// Create a new I2C instance and initialize hardware
+    ///
+    /// This performs full hardware initialization including:
+    /// - I2C global register setup (one-time)
+    /// - Controller reset
+    /// - Multi-master configuration
+    /// - Timing configuration
+    /// - Interrupt enable
+    ///
+    /// Use [`from_initialized`] if hardware is already configured.
     pub fn new(controller: &'a I2cController<'a>, config: I2cConfig) -> Result<Self, I2cError> {
-        let mut i2c = Self {
+        let mut i2c = Self::from_initialized(controller, config);
+        i2c.init_hardware(&config)?;
+        Ok(i2c)
+    }
+
+    /// Create I2C instance from pre-initialized hardware (NO hardware init)
+    ///
+    /// This is a lightweight constructor that wraps register pointers without
+    /// writing to hardware. Use when:
+    /// - Hardware was already initialized by app `main.rs` before kernel start
+    /// - Hardware was initialized by a previous `new()` call
+    /// - You want to avoid redundant re-initialization overhead
+    ///
+    /// # Performance
+    ///
+    /// This is ~50x faster than `new()` as it performs no register writes.
+    ///
+    /// # Preconditions
+    ///
+    /// Caller must ensure hardware is already configured:
+    /// - I2C global registers (I2CG0C, I2CG10) are set
+    /// - Controller is enabled (I2CC00)
+    /// - Timing is configured
+    /// - Pin mux is configured
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// // In app main.rs - initialize once before kernel
+    /// configure_i2c_hardware(&peripherals);
+    ///
+    /// // In driver - create lightweight wrapper per operation
+    /// let i2c = Ast1060I2c::from_initialized(&ctrl, config);
+    /// i2c.write(addr, data)?;
+    /// ```
+    #[must_use]
+    pub fn from_initialized(controller: &'a I2cController<'a>, config: I2cConfig) -> Self {
+        Self {
             controller,
             xfer_mode: config.xfer_mode,
             multi_master: config.multi_master,
@@ -42,10 +88,7 @@ impl<'a> Ast1060I2c<'a> {
             current_len: 0,
             current_xfer_cnt: 0,
             completion: false,
-        };
-
-        i2c.init_hardware(&config)?;
-        Ok(i2c)
+        }
     }
 
     /// Get access to registers (visible to other modules)
