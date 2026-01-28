@@ -12,6 +12,7 @@ pub struct Controller(pub u8);
 
 impl Controller {
     /// Create a new controller instance
+    #[must_use]
     pub const fn new(id: u8) -> Option<Self> {
         if id < 14 {
             Some(Self(id))
@@ -21,6 +22,7 @@ impl Controller {
     }
 
     /// Get the controller ID
+    #[must_use]
     pub const fn id(&self) -> u8 {
         self.0
     }
@@ -33,11 +35,33 @@ impl From<Controller> for u8 {
     }
 }
 
-impl From<u8> for Controller {
-    fn from(id: u8) -> Self {
-        Self(id)
+// NOTE: We intentionally don't implement From<u8> for Controller
+// because it would bypass validation. Use Controller::new() or TryFrom instead.
+impl TryFrom<u8> for Controller {
+    type Error = ();
+
+    fn try_from(id: u8) -> Result<Self, Self::Error> {
+        Self::new(id).ok_or(())
     }
 }
+
+// ============================================================================
+// Design Note: I2C Address Validation
+// ============================================================================
+//
+// embedded-hal defines `SevenBitAddress` as a type alias for `u8`:
+//   pub type SevenBitAddress = u8;
+//
+// This means I2C addresses are NOT validated at the type level in embedded-hal.
+// We follow this convention for compatibility, but validate at runtime in:
+// - SlaveConfig::new() - validates slave address is ≤ 0x7F
+// - Master operations - hardware will NAK invalid addresses
+//
+// Alternative approaches considered but rejected:
+// 1. Custom newtype - breaks embedded-hal I2c<SevenBitAddress> trait impl
+// 2. Const generics - too restrictive, addresses often come from runtime config
+//
+// The tradeoff is: embedded-hal compatibility > compile-time address validation
 
 /// Clock configuration for I2C timing calculations
 ///
@@ -67,28 +91,29 @@ impl From<u8> for Controller {
 pub struct ClockConfig {
     /// APB bus clock frequency in Hz
     pub apb_clock_hz: u32,
-    /// Base clock 1 frequency in Hz (for Fast-plus mode, ~20 MHz)
+    /// Base clock 1 frequency in Hz (for Fast-plus mode, ~20 `MHz`)
     pub base_clk1_hz: u32,
-    /// Base clock 2 frequency in Hz (for Fast mode, ~10 MHz)
+    /// Base clock 2 frequency in Hz (for Fast mode, ~10 `MHz`)
     pub base_clk2_hz: u32,
-    /// Base clock 3 frequency in Hz (for Standard mode, ~2.77 MHz)
+    /// Base clock 3 frequency in Hz (for Standard mode, ~2.77 `MHz`)
     pub base_clk3_hz: u32,
     /// Base clock 4 frequency in Hz (for recovery timeout)
     pub base_clk4_hz: u32,
 }
 
 impl ClockConfig {
-    /// HPLL frequency (1 GHz) used for APB clock derivation
+    /// HPLL frequency (1 `GHz`) used for APB clock derivation
     const HPLL_FREQ: u32 = 1_000_000_000;
 
     /// Default AST1060 clock configuration
     ///
     /// Based on typical AST1060 configuration with:
-    /// - APB clock: 50 MHz (HPLL / 20)
-    /// - I2CG10 register: 0x6222_0803
+    /// - APB clock: 50 `MHz` (HPLL / 20)
+    /// - I2CG10 register: `0x6222_0803`
     ///
     /// This can be used when the actual hardware configuration matches
     /// these defaults, or for testing purposes.
+    #[must_use]
     pub const fn ast1060_default() -> Self {
         // APB = 50 MHz (HPLL / ((9+1) * 2))
         // I2CG10 = 0x6222_0803:
@@ -115,6 +140,7 @@ impl ClockConfig {
     /// This function accesses SCU and I2C global registers. It should be
     /// called during system initialization when these peripherals are
     /// properly configured.
+    #[must_use]
     pub fn from_hardware() -> Self {
         // Read APB clock from SCU
         let scu = unsafe { &*ast1060_pac::Scu::ptr() };
@@ -159,7 +185,7 @@ pub struct I2cController<'a> {
 /// Default configuration is optimized for MCTP-over-I2C:
 /// - Fast mode (400 kHz) - standard MCTP speed
 /// - Buffer mode - efficient for MCTP packet transfers
-/// - SMBus timeout enabled - required for robust MCTP operation
+/// - `SMBus` timeout enabled - required for robust MCTP operation
 #[derive(Debug, Clone, Copy)]
 pub struct I2cConfig {
     /// Transfer mode (byte-by-byte or buffer)
@@ -168,9 +194,9 @@ pub struct I2cConfig {
     pub speed: I2cSpeed,
     /// Enable multi-master support
     pub multi_master: bool,
-    /// Enable SMBus timeout detection (25-35ms per SMBus spec)
+    /// Enable `SMBus` timeout detection (25-35ms per `SMBus` spec)
     pub smbus_timeout: bool,
-    /// Enable SMBus alert interrupt
+    /// Enable `SMBus` alert interrupt
     pub smbus_alert: bool,
     /// Clock configuration for timing calculations
     pub clock_config: ClockConfig,
@@ -194,6 +220,7 @@ impl I2cConfig {
     ///
     /// This is a convenience constructor that reads clock configuration
     /// from hardware registers.
+    #[must_use]
     pub fn with_hardware_clocks() -> Self {
         Self {
             clock_config: ClockConfig::from_hardware(),
@@ -218,6 +245,6 @@ pub enum I2cSpeed {
     Standard,
     /// Fast mode: 400 kHz
     Fast,
-    /// Fast-plus mode: 1 MHz
+    /// Fast-plus mode: 1 `MHz`
     FastPlus,
 }

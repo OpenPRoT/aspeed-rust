@@ -52,7 +52,7 @@ impl<'a> Ast1060I2c<'a> {
 
             // Write data byte
             unsafe {
-                self.regs().i2cc0c().write(|w| w.bits(byte as u32));
+                self.regs().i2cc0c().write(|w| w.bits(u32::from(byte)));
             }
 
             // Start transfer

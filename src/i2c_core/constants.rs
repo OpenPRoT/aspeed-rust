@@ -2,10 +2,10 @@
 
 //! Hardware constants for AST1060 I2C controller
 
-/// HPLL frequency (1 GHz)
+/// HPLL frequency (1 `GHz`)
 pub const HPLL_FREQ: u32 = 1_000_000_000;
 
-/// ASPEED I2C bus clock (100 MHz typical)
+/// ASPEED I2C bus clock (100 `MHz` typical)
 pub const ASPEED_I2C_BUS_CLK_HZ: u32 = 100_000_000;
 
 /// Standard mode speed (100 kHz)
@@ -14,7 +14,7 @@ pub const I2C_STANDARD_MODE_HZ: u32 = 100_000;
 /// Fast mode speed (400 kHz)
 pub const I2C_FAST_MODE_HZ: u32 = 400_000;
 
-/// Fast-plus mode speed (1 MHz)
+/// Fast-plus mode speed (1 `MHz`)
 pub const I2C_FAST_PLUS_MODE_HZ: u32 = 1_000_000;
 
 /// Buffer mode maximum size (32 bytes)
@@ -84,7 +84,7 @@ pub const AST_I2CM_BUS_RECOVER_FAIL: u32 = 1 << 15;
 pub const AST_I2CM_SDA_DL_TO: u32 = 1 << 14;
 /// Bus recovery done
 pub const AST_I2CM_BUS_RECOVER: u32 = 1 << 13;
-/// SMBus alert
+/// `SMBus` alert
 pub const AST_I2CM_SMBUS_ALT: u32 = 1 << 12;
 
 // Slave mode constants
@@ -117,6 +117,7 @@ pub const AST_I2CS_WAIT_RX_DMA: u32 = 1 << 24;
 
 /// Helper to build packet mode address field
 #[inline]
+#[must_use]
 pub fn ast_i2cm_pkt_addr(addr: u8) -> u32 {
     u32::from(addr & 0x7F) << 24
 }

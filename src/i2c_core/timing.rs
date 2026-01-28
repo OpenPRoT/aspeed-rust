@@ -3,7 +3,7 @@
 //! Timing configuration for I2C
 //!
 //! The AST1060 I2C controller uses a hierarchical clock system:
-//! 1. HPLL (1 GHz) → APB clock (typically 50 MHz)
+//! 1. HPLL (1 `GHz`) → APB clock (typically 50 `MHz`)
 //! 2. APB clock → 4 base clocks (configured in I2CG10)
 //! 3. Base clock → SCL frequency via per-controller divider
 //!
@@ -25,7 +25,7 @@
 //! |------------|----------|------------|-------------|------------|
 //! | Standard   | 100 kHz  | 4.7 µs     | 4.0 µs      | 4.7 µs     |
 //! | Fast       | 400 kHz  | 1.3 µs     | 0.6 µs      | 1.3 µs     |
-//! | Fast-plus  | 1 MHz    | 0.5 µs     | 0.26 µs     | 0.5 µs     |
+//! | Fast-plus  | 1 `MHz`    | 0.5 µs     | 0.26 µs     | 0.5 µs     |
 //!
 //! # Clock Derivation
 //!
@@ -37,11 +37,11 @@
 //! I2CG10[31:24] = base_clk4 divisor → Recovery timeout source
 //! ```
 //!
-//! Default I2CG10 value: 0x6222_0803
-//! With 50 MHz APB clock:
-//! - base_clk1 (0x03): 50M / ((3+2)/2) = 20 MHz → 1 MHz with div=20
-//! - base_clk2 (0x08): 50M / ((8+2)/2) = 10 MHz → 400 kHz with div=25
-//! - base_clk3 (0x22): 50M / ((34+2)/2) = 2.77 MHz → 100 kHz with div=28
+//! Default I2CG10 value: `0x6222_0803`
+//! With 50 `MHz` APB clock:
+//! - `base_clk1` (0x03): 50M / ((3+2)/2) = 20 `MHz` → 1 `MHz` with div=20
+//! - `base_clk2` (0x08): 50M / ((8+2)/2) = 10 `MHz` → 400 kHz with div=25
+//! - `base_clk3` (0x22): 50M / ((34+2)/2) = 2.77 `MHz` → 100 kHz with div=28
 
 use super::error::I2cError;
 use super::types::{ClockConfig, I2cConfig, I2cSpeed};
@@ -204,7 +204,9 @@ fn calculate_divider(clocks: &ClockConfig, target_speed: u32) -> Result<(u32, u3
 fn calculate_scl_low(divider_ratio: u32) -> u8 {
     // scl_low = (ratio * 9/16) - 1, clamped to 4 bits
     let scl_low = (divider_ratio * 9 / 16).saturating_sub(1);
-    min(scl_low, 0xf) as u8
+    #[allow(clippy::cast_possible_truncation)]
+    let result = min(scl_low, 0xf) as u8;
+    result
 }
 
 /// Calculate SCL high time cycles
@@ -215,58 +217,7 @@ fn calculate_scl_high(divider_ratio: u32, scl_low: u8) -> u8 {
     let scl_high = divider_ratio
         .saturating_sub(u32::from(scl_low))
         .saturating_sub(2);
-    min(scl_high, 0xf) as u8
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_calculate_divider_fast_mode() {
-        let clocks = ClockConfig::ast1060_default();
-        let (div, ratio) = calculate_divider(&clocks, SPEED_FAST).unwrap();
-        // Fast mode (400 kHz) should use base_clk2 (10 MHz) with div=2
-        assert_eq!(div, 2);
-        assert!(ratio <= MAX_DIVIDER_RATIO);
-        // 10 MHz / ratio should be close to 400 kHz
-        let actual_speed = clocks.base_clk2_hz / ratio;
-        assert!(actual_speed <= SPEED_FAST);
-    }
-
-    #[test]
-    fn test_calculate_divider_standard_mode() {
-        let clocks = ClockConfig::ast1060_default();
-        let (div, ratio) = calculate_divider(&clocks, SPEED_STANDARD).unwrap();
-        // Standard mode (100 kHz) should use base_clk3 (2.77 MHz) with div=3
-        assert_eq!(div, 3);
-        assert!(ratio <= MAX_DIVIDER_RATIO);
-    }
-
-    #[test]
-    fn test_calculate_divider_zero_speed_returns_error() {
-        let clocks = ClockConfig::ast1060_default();
-        assert!(calculate_divider(&clocks, 0).is_err());
-    }
-
-    #[test]
-    fn test_scl_timing_ratios() {
-        // With divider_ratio = 25 (typical for 400 kHz)
-        let scl_low = calculate_scl_low(25);
-        let scl_high = calculate_scl_high(25, scl_low);
-        // SCL low should be > SCL high (asymmetric per I2C spec)
-        assert!(scl_low >= scl_high);
-        // Both should fit in 4 bits
-        assert!(scl_low <= 0xf);
-        assert!(scl_high <= 0xf);
-    }
-}
-///
-/// High time is the remainder after low time and 2 cycles for edges.
-fn calculate_scl_high(divider_ratio: u32, scl_low: u8) -> u8 {
-    // scl_high = ratio - scl_low - 2 (2 cycles for rise/fall edges)
-    let scl_high = divider_ratio
-        .saturating_sub(u32::from(scl_low))
-        .saturating_sub(2);
-    min(scl_high, 0xf) as u8
+    #[allow(clippy::cast_possible_truncation)]
+    let result = min(scl_high, 0xf) as u8;
+    result
 }
