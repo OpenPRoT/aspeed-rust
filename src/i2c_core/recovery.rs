@@ -20,13 +20,18 @@ impl<'a> Ast1060I2c<'a> {
         // Clear all interrupts
         self.clear_interrupts(0xffff_ffff);
 
-        // Issue bus recovery command
-        // Trigger bus recovery by setting recovery command bit
-        unsafe {
-            self.regs()
-                .i2cm14()
-                .write(|w| w.bits(constants::AST_I2CM_BUS_RECOVER));
+        // Check SDA/SCL state before attempting recovery
+        // Only recover if SDA is stuck low while SCL is high
+        let line_status = self.regs().i2cc08().read();
+        if line_status.sampled_sdaline_state().bit() || !line_status.sampled_sclline_state().bit() {
+            // SDA is not stuck low, or SCL is also stuck - can't recover this way
+            return Err(I2cError::BusRecoveryFailed);
         }
+
+        // Issue bus recovery command via I2CM18 (command register)
+        self.regs()
+            .i2cm18()
+            .modify(|_, w| w.enbl_bus_recover_cmd().set_bit());
 
         // Wait for recovery completion
         let mut timeout = 100_000; // 100ms
