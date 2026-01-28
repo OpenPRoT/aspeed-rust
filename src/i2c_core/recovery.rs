@@ -50,6 +50,7 @@ impl<'a> Ast1060I2c<'a> {
     }
 
     /// Check if bus recovery is needed
+    #[must_use]
     pub fn needs_recovery(&self) -> bool {
         let status = self.regs().i2cm14().read().bits();
 

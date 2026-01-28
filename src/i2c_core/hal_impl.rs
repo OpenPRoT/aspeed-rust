@@ -23,7 +23,7 @@
 //! - **Multi-master capability** with arbitration
 //! - **Standard (100 kHz) and Fast (400 kHz) modes**
 //! - **Slave/target mode** with hardware packet mode and interrupts
-//! - **SMBus protocol support**
+//! - **`SMBus` protocol support**
 //! - **Automatic bus recovery**
 //!
 //! # Slave Mode API
@@ -64,15 +64,17 @@
 
 use super::controller::Ast1060I2c;
 use super::error::I2cError;
-use embedded_hal::i2c::{Error, ErrorKind, ErrorType, I2c, NoAcknowledgeSource, Operation, SevenBitAddress};
+use embedded_hal::i2c::{
+    Error, ErrorKind, ErrorType, I2c, NoAcknowledgeSource, Operation, SevenBitAddress,
+};
 
 // ============================================================================
 // embedded-hal Error Trait Implementation
 // ============================================================================
 
-/// Implements the embedded-hal Error trait for I2cError.
+/// Implements the embedded-hal Error trait for `I2cError`.
 ///
-/// Maps AST1060-specific I2C errors to standard embedded-hal ErrorKind values.
+/// Maps AST1060-specific I2C errors to standard embedded-hal `ErrorKind` values.
 /// This enables interoperability with any code using the embedded-hal I2C traits.
 ///
 /// # Error Mappings
@@ -99,7 +101,7 @@ impl Error for I2cError {
     }
 }
 
-/// Associates the I2cError type with Ast1060I2c for embedded-hal trait implementations.
+/// Associates the `I2cError` type with `Ast1060I2c` for embedded-hal trait implementations.
 impl<'a> ErrorType for Ast1060I2c<'a> {
     type Error = I2cError;
 }
@@ -108,7 +110,7 @@ impl<'a> ErrorType for Ast1060I2c<'a> {
 // embedded-hal I2c Trait Implementation (Master Mode)
 // ============================================================================
 
-/// Implements the embedded-hal I2c trait for Ast1060I2c.
+/// Implements the embedded-hal I2c trait for `Ast1060I2c`.
 ///
 /// Provides standard I2C master mode operations compatible with the embedded-hal ecosystem.
 /// This implementation uses the AST1060's buffer mode with a 32-byte FIFO for efficient
@@ -118,7 +120,7 @@ impl<'a> ErrorType for Ast1060I2c<'a> {
 ///
 /// - **write**: Send data to a slave device
 /// - **read**: Receive data from a slave device  
-/// - **write_read**: Write then read without releasing the bus (combined transaction)
+/// - **`write_read`**: Write then read without releasing the bus (combined transaction)
 /// - **transaction**: Execute a sequence of read/write operations
 ///
 /// # Buffer Mode Limitations
@@ -265,4 +267,3 @@ impl<'a> I2c<SevenBitAddress> for Ast1060I2c<'a> {
         Ok(())
     }
 }
-

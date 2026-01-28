@@ -13,7 +13,7 @@
 //! - Buffer mode with 32-byte hardware FIFO
 //! - Byte-by-byte mode for simple transfers
 //! - Clock stretching and bus recovery
-//! - SMBus alert support
+//! - `SMBus` alert support
 //! - Configurable speeds: Standard (100kHz), Fast (400kHz), Fast-plus (1MHz)
 //!
 //! # Architecture
@@ -63,6 +63,7 @@ mod hal_impl;
 mod master;
 mod recovery;
 mod slave;
+pub mod target_adapter;
 mod timing;
 mod transfer;
 mod types;
@@ -71,7 +72,5 @@ mod types;
 pub use constants::*;
 pub use controller::Ast1060I2c;
 pub use error::I2cError;
+pub use slave::{SlaveBuffer, SlaveConfig, SlaveEvent, SLAVE_BUFFER_SIZE};
 pub use types::*;
-
-// Re-export HAL implementations for external use
-pub use hal_impl::*;

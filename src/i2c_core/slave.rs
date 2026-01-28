@@ -62,7 +62,14 @@ pub struct SlaveBuffer {
     len: usize,
 }
 
+impl Default for SlaveBuffer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SlaveBuffer {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             data: [0u8; SLAVE_BUFFER_SIZE],
@@ -70,6 +77,7 @@ impl SlaveBuffer {
         }
     }
 
+    #[must_use]
     pub fn data(&self) -> &[u8] {
         &self.data[..self.len]
     }
@@ -82,10 +90,12 @@ impl SlaveBuffer {
         self.len = len.min(SLAVE_BUFFER_SIZE);
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.len
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
@@ -183,6 +193,7 @@ impl<'a> Ast1060I2c<'a> {
     }
 
     /// Check if slave has received data
+    #[must_use]
     pub fn slave_has_data(&self) -> bool {
         let status = self.regs().i2cs24().read().bits();
         (status & constants::AST_I2CS_RX_DONE) != 0
@@ -230,6 +241,7 @@ impl<'a> Ast1060I2c<'a> {
         self.copy_to_buffer(&data[..to_write])?;
 
         // Set transfer length
+        #[allow(clippy::cast_possible_truncation)]
         unsafe {
             self.regs().i2cs2c().write(|w| w.bits(to_write as u32));
         }

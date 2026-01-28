@@ -17,7 +17,10 @@ impl<'a> Ast1060I2c<'a> {
         }
 
         self.current_addr = addr;
-        self.current_len = len as u32;
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            self.current_len = len as u32;
+        }
         self.current_xfer_cnt = 0;
         self.completion = false;
 
@@ -25,13 +28,16 @@ impl<'a> Ast1060I2c<'a> {
         self.clear_interrupts(0xffff_ffff);
 
         match self.xfer_mode {
-            I2cXferMode::ByteMode => self.start_byte_mode(addr, is_read, len),
+            I2cXferMode::ByteMode => {
+                self.start_byte_mode(addr, is_read, len);
+                Ok(())
+            }
             I2cXferMode::BufferMode => self.start_buffer_mode(addr, is_read, len),
         }
     }
 
     /// Start transfer in byte mode
-    fn start_byte_mode(&mut self, addr: u8, is_read: bool, len: usize) -> Result<(), I2cError> {
+    fn start_byte_mode(&mut self, addr: u8, is_read: bool, len: usize) {
         // For byte mode, we'll use the master command register
         let mut cmd = constants::AST_I2CM_START_CMD;
 
@@ -48,15 +54,13 @@ impl<'a> Ast1060I2c<'a> {
         unsafe {
             self.regs()
                 .i2cc0c()
-                .write(|w| w.bits((addr as u32) << 1 | is_read as u32));
+                .write(|w| w.bits(u32::from(addr) << 1 | u32::from(is_read)));
         }
 
         // Issue command
         unsafe {
             self.regs().i2cm14().write(|w| w.bits(cmd));
         }
-
-        Ok(())
     }
 
     /// Start transfer in buffer mode (up to 32 bytes)
@@ -78,6 +82,7 @@ impl<'a> Ast1060I2c<'a> {
         cmd |= constants::AST_I2CM_STOP_CMD;
 
         // Build packet command: address in bits [31:24], length in bits [15:8]
+        #[allow(clippy::cast_possible_truncation)]
         let pkt_cmd = constants::ast_i2cm_pkt_addr(addr) | ((len as u32) << 8);
 
         // Set packet command
@@ -107,7 +112,7 @@ impl<'a> Ast1060I2c<'a> {
             let mut dword: u32 = 0;
             for byte_pos in 0..4 {
                 if idx + byte_pos < data.len() {
-                    dword |= (data[idx + byte_pos] as u32) << (byte_pos * 8);
+                    dword |= u32::from(data[idx + byte_pos]) << (byte_pos * 8);
                 }
             }
 

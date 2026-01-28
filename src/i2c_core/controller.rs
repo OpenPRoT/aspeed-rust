@@ -8,12 +8,14 @@ use super::{constants, error::I2cError};
 use ast1060_pac::{i2c::RegisterBlock, i2cbuff::RegisterBlock as BuffRegisterBlock};
 
 /// Main I2C hardware abstraction
+#[allow(clippy::struct_excessive_bools)]
 pub struct Ast1060I2c<'a> {
     controller: &'a I2cController<'a>,
     /// Transfer mode (visible to other modules for optimization decisions)
     pub(crate) xfer_mode: I2cXferMode,
     multi_master: bool,
     smbus_alert: bool,
+    #[allow(dead_code)]
     bus_recover: bool,
 
     // Transfer state (visible to transfer/master modules)
@@ -62,7 +64,7 @@ impl<'a> Ast1060I2c<'a> {
     #[inline(never)]
     pub fn init_hardware(&mut self, config: &I2cConfig) -> Result<(), I2cError> {
         // Initialize I2C global registers (one-time init)
-        init_i2c_global()?;
+        init_i2c_global();
 
         // Reset I2C controller
         unsafe {
@@ -126,6 +128,7 @@ impl<'a> Ast1060I2c<'a> {
     /// Check if bus is busy
     ///
     /// Checks if any I2C transfer is currently active by examining status register bits.
+    #[must_use]
     pub fn is_bus_busy(&self) -> bool {
         let status = self.regs().i2cm14().read().bits();
         // Bus is busy if any transfer command bits are set
@@ -146,16 +149,16 @@ impl<'a> Ast1060I2c<'a> {
             timeout = timeout.saturating_sub(1);
         }
 
-        if !self.completion {
-            Err(I2cError::Timeout)
-        } else {
+        if self.completion {
             Ok(())
+        } else {
+            Err(I2cError::Timeout)
         }
     }
 }
 
 /// Initialize I2C global registers (one-time init)
-fn init_i2c_global() -> Result<(), I2cError> {
+fn init_i2c_global() {
     use core::sync::atomic::{AtomicBool, Ordering};
     static I2CGLOBAL_INIT: AtomicBool = AtomicBool::new(false);
 
@@ -203,6 +206,4 @@ fn init_i2c_global() -> Result<(), I2cError> {
             i2cg.i2cg10().write(|w| w.bits(0x6222_0803));
         }
     }
-
-    Ok(())
 }
