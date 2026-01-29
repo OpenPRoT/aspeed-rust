@@ -176,6 +176,20 @@ impl<'a> Ast1060I2c<'a> {
         }
     }
 
+    /// Enable slave mode (re-enable after disable)
+    ///
+    /// This re-enables slave mode and interrupts without reconfiguring the address.
+    /// Use `configure_slave()` for initial setup, this for re-enabling after `disable_slave()`.
+    pub fn enable_slave(&mut self) {
+        // Enable slave mode
+        self.regs()
+            .i2cc00()
+            .modify(|_, w| w.enbl_slave_fn().set_bit());
+
+        // Enable slave interrupts
+        self.enable_slave_interrupts();
+    }
+
     /// Disable slave mode
     pub fn disable_slave(&mut self) {
         // Disable interrupts
