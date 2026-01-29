@@ -56,7 +56,7 @@ pub enum SlaveEvent {
     AddressMatch,
 }
 
-/// Slave mode data buffer
+/// Slave mode data buffer for application-level buffering
 pub struct SlaveBuffer {
     data: [u8; SLAVE_BUFFER_SIZE],
     len: usize,

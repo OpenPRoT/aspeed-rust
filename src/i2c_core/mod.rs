@@ -36,6 +36,9 @@
 //! use aspeed_ddk::i2c_core::*;
 //! use ast1060_pac;
 //!
+//! // Initialize I2C global registers ONCE before any controller use
+//! init_i2c_global();
+//!
 //! // Create controller reference
 //! let i2c_regs = unsafe { &*ast1060_pac::I2c1::ptr() };
 //! let buff_regs = unsafe { &*ast1060_pac::I2cbuff1::ptr() };
@@ -59,11 +62,11 @@
 mod constants;
 mod controller;
 mod error;
+mod global;
 mod hal_impl;
 mod master;
 mod recovery;
 mod slave;
-pub mod target_adapter;
 mod timing;
 mod transfer;
 mod types;
@@ -72,5 +75,10 @@ mod types;
 pub use constants::*;
 pub use controller::Ast1060I2c;
 pub use error::I2cError;
-pub use slave::{SlaveBuffer, SlaveConfig, SlaveEvent, SLAVE_BUFFER_SIZE};
+pub use global::init_i2c_global;
+pub use slave::{SlaveBuffer, SlaveConfig, SlaveEvent};
 pub use types::*;
+
+// Re-export HAL implementations for external use
+#[allow(unused_imports)]
+pub use hal_impl::*;

@@ -61,7 +61,7 @@ impl<'a> Ast1060I2c<'a> {
     /// # Preconditions
     ///
     /// Caller must ensure hardware is already configured:
-    /// - I2C global registers (I2CG0C, I2CG10) are set
+    /// - I2C global registers (I2CG0C, I2CG10) are set (call [`init_i2c_global()`] ONCE in your app before use)
     /// - Controller is enabled (I2CC00)
     /// - Timing is configured
     /// - Pin mux is configured
@@ -70,7 +70,8 @@ impl<'a> Ast1060I2c<'a> {
     ///
     /// ```rust,no_run
     /// // In app main.rs - initialize once before kernel
-    /// configure_i2c_hardware(&peripherals);
+    /// use aspeed_ddk::i2c_core::init_i2c_global;
+    /// init_i2c_global();
     ///
     /// // In driver - create lightweight wrapper per operation
     /// let i2c = Ast1060I2c::from_initialized(&ctrl, config);
@@ -106,8 +107,8 @@ impl<'a> Ast1060I2c<'a> {
     /// Initialize hardware
     #[inline(never)]
     pub fn init_hardware(&mut self, config: &I2cConfig) -> Result<(), I2cError> {
-        // Initialize I2C global registers (one-time init)
-        init_i2c_global();
+        // PRECONDITION: I2C global registers must be initialized by app before use.
+        // See: i2c_core::global::init_i2c_global().
 
         // Reset I2C controller
         unsafe {
@@ -196,68 +197,6 @@ impl<'a> Ast1060I2c<'a> {
             Ok(())
         } else {
             Err(I2cError::Timeout)
-        }
-    }
-}
-
-/// Initialize I2C global registers (one-time init)
-///
-/// # Design Note: AtomicBool Guard
-///
-/// The `AtomicBool` prevents re-initialization if `new()` is called multiple times
-/// (e.g., initializing I2C1 then I2C2). However, with the `from_initialized()` pattern
-/// where apps pre-configure hardware in `main.rs` before kernel start, this code path
-/// is rarely taken in production.
-///
-/// The atomic generates `ldrexb/strexb` sequences plus memory barriers, adding ~50 bytes.
-/// Consider moving global init to a public utility function that apps call explicitly,
-/// which would eliminate the need for runtime guards entirely.
-fn init_i2c_global() {
-    use core::sync::atomic::{AtomicBool, Ordering};
-    static I2CGLOBAL_INIT: AtomicBool = AtomicBool::new(false);
-
-    if I2CGLOBAL_INIT
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_ok()
-    {
-        unsafe {
-            let scu = &*ast1060_pac::Scu::ptr();
-            let i2cg = &*ast1060_pac::I2cglobal::ptr();
-
-            // Reset I2C/SMBus controller (assert reset)
-            scu.scu050().write(|w| w.rst_i2csmbus_ctrl().set_bit());
-
-            // Small delay for reset to take effect
-            for _ in 0..1000 {
-                core::hint::spin_loop();
-            }
-
-            // De-assert reset (SCU054 is reset clear register)
-            // rst_i2csmbus_ctrl is bit 2, so we write 0x4 (1 << 2)
-            scu.scu054().write(|w| w.bits(0x4));
-
-            // Small delay
-            for _ in 0..1000 {
-                core::hint::spin_loop();
-            }
-
-            // Configure global settings
-            i2cg.i2cg0c().write(|w| {
-                w.clk_divider_mode_sel()
-                    .set_bit()
-                    .reg_definition_sel()
-                    .set_bit()
-                    .select_the_action_when_slave_pkt_mode_rxbuf_empty()
-                    .set_bit()
-            });
-
-            // Set base clock dividers for different speeds
-            // Based on 50MHz APB clock:
-            // - Fast-plus (1MHz): base clk1 = 0x03 → 20MHz
-            // - Fast (400kHz): base clk2 = 0x08 → 10MHz
-            // - Standard (100kHz): base clk3 = 0x22 → 2.77MHz
-            // - Recovery timeout: base clk4 = 0x62
-            i2cg.i2cg10().write(|w| w.bits(0x6222_0803));
         }
     }
 }
