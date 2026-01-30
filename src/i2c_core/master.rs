@@ -191,7 +191,9 @@ impl<'a> Ast1060I2c<'a> {
     /// Write in buffer mode (optimal for 2-32 bytes)
     ///
     /// Uses hardware buffer for efficient multi-byte transfers.
-    /// Each chunk is a complete transaction with START/STOP.
+    /// Single transaction model: START+addr on first chunk only,
+    /// subsequent chunks continue the transaction without re-addressing.
+    /// Reference: ast1060_i2c.rs do_i2cm_tx() continuation logic
     fn write_buffer_mode(&mut self, addr: u8, bytes: &[u8]) -> Result<(), I2cError> {
         let total_len = bytes.len();
         let mut offset = 0;
@@ -207,6 +209,7 @@ impl<'a> Ast1060I2c<'a> {
         while offset < total_len {
             let chunk_len = core::cmp::min(constants::BUFFER_MODE_SIZE, total_len - offset);
             let chunk = &bytes[offset..offset + chunk_len];
+            let is_first = offset == 0;
             let is_last = offset + chunk_len >= total_len;
 
             // Copy data to hardware buffer BEFORE issuing command
@@ -222,12 +225,17 @@ impl<'a> Ast1060I2c<'a> {
             self.clear_interrupts(0xffff_ffff);
             self.completion = false;
 
-            // Build command: PKT_EN + addr + START + TX_CMD + TX_BUFF_EN
+            // Build command based on chunk position
+            // First chunk: PKT_EN + addr + START + TX_CMD + TX_BUFF_EN
+            // Subsequent chunks: PKT_EN + TX_CMD + TX_BUFF_EN (NO START, NO addr)
             let mut cmd = constants::AST_I2CM_PKT_EN
-                | constants::ast_i2cm_pkt_addr(addr)
-                | constants::AST_I2CM_START_CMD
                 | constants::AST_I2CM_TX_CMD
                 | constants::AST_I2CM_TX_BUFF_EN;
+
+            // Only send START and address on first chunk
+            if is_first {
+                cmd |= constants::ast_i2cm_pkt_addr(addr) | constants::AST_I2CM_START_CMD;
+            }
 
             // Add STOP on last chunk
             if is_last {
@@ -262,7 +270,9 @@ impl<'a> Ast1060I2c<'a> {
     /// Read in buffer mode
     ///
     /// Uses hardware buffer for efficient multi-byte transfers.
-    /// Each chunk is a complete transaction with START/STOP.
+    /// Single transaction model: START+addr on first chunk only,
+    /// subsequent chunks continue the transaction without re-addressing.
+    /// Reference: ast1060_i2c.rs do_i2cm_rx() lines 762-810
     fn read_buffer_mode(&mut self, addr: u8, buffer: &mut [u8]) -> Result<(), I2cError> {
         let total_len = buffer.len();
         let mut offset = 0;
@@ -277,6 +287,7 @@ impl<'a> Ast1060I2c<'a> {
 
         while offset < total_len {
             let chunk_len = core::cmp::min(constants::BUFFER_MODE_SIZE, total_len - offset);
+            let is_first = offset == 0;
             let is_last = offset + chunk_len >= total_len;
 
             // Set RX buffer size in i2cc0c (len - 1)
@@ -289,12 +300,17 @@ impl<'a> Ast1060I2c<'a> {
             self.clear_interrupts(0xffff_ffff);
             self.completion = false;
 
-            // Build command: PKT_EN + addr + START + RX_CMD + RX_BUFF_EN
+            // Build command based on chunk position
+            // First chunk: PKT_EN + addr + START + RX_CMD + RX_BUFF_EN
+            // Subsequent chunks: PKT_EN + RX_CMD + RX_BUFF_EN (NO START, NO addr)
             let mut cmd = constants::AST_I2CM_PKT_EN
-                | constants::ast_i2cm_pkt_addr(addr)
-                | constants::AST_I2CM_START_CMD
                 | constants::AST_I2CM_RX_CMD
                 | constants::AST_I2CM_RX_BUFF_EN;
+
+            // Only send START and address on first chunk
+            if is_first {
+                cmd |= constants::ast_i2cm_pkt_addr(addr) | constants::AST_I2CM_START_CMD;
+            }
 
             // Add NACK and STOP on last chunk
             if is_last {
