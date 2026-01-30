@@ -1,6 +1,6 @@
 // Licensed under the Apache-2.0 license
 
-use crate::uart::UartController;
+use crate::uart_core::UartController;
 use embedded_io::Write;
 
 pub fn print_array_u32(uart: &mut UartController<'_>, data: &[u32]) {

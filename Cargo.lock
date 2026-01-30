@@ -63,6 +63,7 @@ name = "aspeed-ddk"
 version = "0.1.0"
 dependencies = [
  "ast1060-pac",
+ "bitflags",
  "cortex-m",
  "cortex-m-rt",
  "embedded-hal 1.0.0",
@@ -114,6 +115,12 @@ name = "bitfield"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46afbd2983a5d5a7bd740ccb198caf5b82f45c40c09c0eed36052d91cb92e719"
+
+[[package]]
+name = "bitflags"
+version = "2.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "812e12b5285cc515a9c72a5c1d3b6d46a19dac5acfef5265968c166106e31dd3"
 
 [[package]]
 name = "byteorder"

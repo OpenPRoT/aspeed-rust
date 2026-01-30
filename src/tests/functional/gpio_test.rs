@@ -7,7 +7,7 @@ use embedded_io::Write;
 use crate::common::DummyDelay;
 use crate::gpio::{gpioa, gpioh, gpiol, gpiom, Floating, GpioExt};
 use crate::pinctrl;
-use crate::uart::UartController;
+use crate::uart_core::UartController;
 use embedded_hal::delay::DelayNs;
 
 pub fn test_gpioa(uart: &mut UartController<'_>) {

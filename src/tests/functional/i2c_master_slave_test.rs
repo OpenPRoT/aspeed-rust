@@ -52,7 +52,7 @@ use crate::i2c_core::{
     SlaveConfig, SlaveEvent,
 };
 use crate::pinctrl;
-use crate::uart::UartController;
+use crate::uart_core::UartController;
 use ast1060_pac::Peripherals;
 use embedded_io::Write;
 

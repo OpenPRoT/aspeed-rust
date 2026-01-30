@@ -28,6 +28,7 @@ spi_monitor = []
 
 [dependencies]
 ast1060-pac = { git = "https://github.com/AspeedTech-BMC/ast1060-pac.git", features = ["rt"] }
+bitflags = "2.6"
 embedded-hal = { version = "1.0.0" }
 embedded-hal-old = { git = "https://github.com/rust-embedded/embedded-hal.git", rev = "599d44fdc7e709cb9ae6580ec11c0b7f7f102", package = "embedded-hal" }
 embedded-io = "0.6.1"

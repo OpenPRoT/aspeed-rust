@@ -20,7 +20,7 @@ use crate::spi::{
     SPI_CTRL_CEX_SPI_CMD_MASK, SPI_CTRL_CEX_SPI_CMD_SHIFT, SPI_DMA_CLK_FREQ_MASK,
     SPI_DMA_CLK_FREQ_SHIFT, SPI_DMA_DELAY_MASK, SPI_DMA_DELAY_SHIFT,
 };
-use crate::{common::DummyDelay, spi::norflash::SpiNorData, uart::UartController};
+use crate::{common::DummyDelay, spi::norflash::SpiNorData, uart_core::UartController};
 
 use embedded_hal::{
     delay::DelayNs,

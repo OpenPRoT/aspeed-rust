@@ -1,6 +1,6 @@
 // Licensed under the Apache-2.0 license
 
-use crate::uart::UartController;
+use crate::uart_core::UartController;
 use core::ops::{Index, IndexMut};
 use embedded_io::Write;
 

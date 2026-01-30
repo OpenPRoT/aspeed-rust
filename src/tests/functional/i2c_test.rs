@@ -5,7 +5,7 @@ use crate::i2c::ast1060_i2c::Ast1060I2c;
 use crate::i2c::common::{I2cConfigBuilder, I2cSpeed, I2cXferMode};
 use crate::i2c::i2c_controller::{HardwareInterface, I2cController};
 use crate::pinctrl;
-use crate::uart::{self, Config, UartController};
+use crate::uart_core::{UartConfig, UartController};
 use ast1060_pac::Peripherals;
 #[cfg(feature = "i2c_target")]
 use cortex_m::peripheral::NVIC;
@@ -92,19 +92,11 @@ impl RegisterAccess for DummyI2CTarget {
 #[allow(clippy::too_many_lines)]
 pub fn test_i2c_master(uart: &mut UartController<'_>) {
     let peripherals = unsafe { Peripherals::steal() };
-    let mut delay = DummyDelay {};
-    let mut dbg_uart = UartController::new(peripherals.uart, &mut delay);
+    let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
+    let mut dbg_uart = UartController::new(uart_regs);
 
     writeln!(uart, "\r\n####### I2C master test #######\r\n").unwrap();
-    unsafe {
-        dbg_uart.init(&Config {
-            baud_rate: 115_200,
-            word_length: uart::WordLength::Eight as u8,
-            parity: uart::Parity::None,
-            stop_bits: uart::StopBits::One,
-            clock: 24_000_000,
-        });
-    }
+    dbg_uart.init(&UartConfig::default()).unwrap();
     let i2c_config = I2cConfigBuilder::new()
         .xfer_mode(I2cXferMode::DmaMode)
         .multi_master(true)
@@ -243,20 +235,11 @@ pub fn test_i2c_slave(uart: &mut UartController<'_>) {
     writeln!(uart, "\r\n####### I2C slave test #######\r\n").unwrap();
 
     let peripherals = unsafe { Peripherals::steal() };
-    let mut delay = DummyDelay {};
     unsafe {
-        let mut dbg_uart = UartController::new(
-            peripherals.uart,
-            core::mem::transmute::<&mut DummyDelay, &'static mut DummyDelay>(&mut delay),
-        );
+        let uart_regs = &*ast1060_pac::Uart::ptr();
+        let mut dbg_uart = UartController::new(uart_regs);
 
-        dbg_uart.init(&Config {
-            baud_rate: 115_200,
-            word_length: uart::WordLength::Eight as u8,
-            parity: uart::Parity::None,
-            stop_bits: uart::StopBits::One,
-            clock: 24_000_000,
-        });
+        dbg_uart.init(&UartConfig::default()).unwrap();
 
         let i2c_config = I2cConfigBuilder::new()
             .xfer_mode(I2cXferMode::DmaMode)

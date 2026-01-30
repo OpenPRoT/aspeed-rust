@@ -1,7 +1,7 @@
 // Licensed under the Apache-2.0 license
 
 use crate::timer::{TimerController, TimerType};
-use crate::uart::UartController;
+use crate::uart_core::UartController;
 use ast1060_pac::Timer;
 use cortex_m::peripheral::NVIC;
 use embedded_hal_old::timer::CountDown;

@@ -2,7 +2,7 @@
 
 use crate::rsa::{RsaDigest, RsaPrivateKey, RsaPublicKey, RsaSignatureData};
 use crate::tests::functional::rsa_test_vec::RSA_VERIFY_TV;
-use crate::uart::UartController;
+use crate::uart_core::UartController;
 use embedded_io::Write;
 use proposed_traits::rsa::{PaddingMode, RsaSign, RsaVerify};
 

@@ -14,8 +14,7 @@ use crate::spi::norflashblockdevice;
 use crate::spi::norflashblockdevice::{BlockAddrUsize, NorFlashBlockDevice};
 use crate::spi::spicontroller::SpiController;
 use crate::spimonitor::{RegionInfo, SpiMonitor, SpimExtMuxSel};
-use crate::uart;
-use crate::uart::{Config, UartController};
+use crate::uart_core::{UartConfig, UartController};
 use crate::{astdebug, pinctrl};
 use ast1060_pac::{Peripherals, Spipf, Spipf1, Spipf2, Spipf3};
 use embedded_hal::delay::DelayNs;
@@ -319,18 +318,9 @@ pub fn test_fmc(uart: &mut UartController<'_>) {
     let fmc_data = SpiData::new();
 
     let peripherals = unsafe { Peripherals::steal() };
-    let fmc_uart = peripherals.uart;
-    let mut delay = DummyDelay {};
-    let mut fmc_uart_controller = UartController::new(fmc_uart, &mut delay);
-    unsafe {
-        fmc_uart_controller.init(&Config {
-            baud_rate: 115_200,
-            word_length: uart::WordLength::Eight as u8,
-            parity: uart::Parity::None,
-            stop_bits: uart::StopBits::One,
-            clock: 24_000_000,
-        });
-    }
+    let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
+    let mut fmc_uart_controller = UartController::new(uart_regs);
+    fmc_uart_controller.init(&UartConfig::default()).unwrap();
 
     let mut controller = FmcController::new(
         fmc_spi,
@@ -407,18 +397,9 @@ pub fn test_spi(uart: &mut UartController<'_>) {
 
     let spi_data = SpiData::new();
     let peripherals = unsafe { Peripherals::steal() };
-    let spi_uart = peripherals.uart;
-    let mut delay = DummyDelay {};
-    let mut spi_uart_controller = UartController::new(spi_uart, &mut delay);
-    unsafe {
-        spi_uart_controller.init(&Config {
-            baud_rate: 115_200,
-            word_length: uart::WordLength::Eight as u8,
-            parity: uart::Parity::None,
-            stop_bits: uart::StopBits::One,
-            clock: 24_000_000,
-        });
-    }
+    let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
+    let mut spi_uart_controller = UartController::new(uart_regs);
+    spi_uart_controller.init(&UartConfig::default()).unwrap();
 
     let mut spi_controller = SpiController::new(
         spi0,
@@ -535,20 +516,11 @@ pub fn test_spi(uart: &mut UartController<'_>) {
 
 pub fn test_block_device<T: SpiNorDevice>(blockdev: &mut NorFlashBlockDevice<T>) {
     let peripherals = unsafe { Peripherals::steal() };
-    let uart = peripherals.uart;
-    let mut delay = DummyDelay {};
-    let mut uartc = UartController::new(uart, &mut delay);
+    let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
+    let mut uartc = UartController::new(uart_regs);
     let addr = 0x0;
 
-    unsafe {
-        uartc.init(&Config {
-            baud_rate: 115_200,
-            word_length: uart::WordLength::Eight as u8,
-            parity: uart::Parity::None,
-            stop_bits: uart::StopBits::One,
-            clock: 24_000_000,
-        });
-    }
+    uartc.init(&UartConfig::default()).unwrap();
 
     let testsize = 0x400;
     let wbuf: &mut [u8] = unsafe { SPI_NC_BUFFER[WRITE_IDX].as_mut_slice(0, testsize) };
@@ -643,19 +615,10 @@ pub fn test_spi2(uart: &mut UartController<'_>) {
     test_log!(uart, " SCU:: 0x{:08x}", SCU_BASE);
 
     let peripherals = unsafe { Peripherals::steal() };
-    let spi_uart = peripherals.uart;
-    let mut delay = DummyDelay {};
+    let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
 
-    let mut uart_controller = UartController::new(spi_uart, &mut delay);
-    unsafe {
-        uart_controller.init(&Config {
-            baud_rate: 115_200,
-            word_length: uart::WordLength::Eight as u8,
-            parity: uart::Parity::None,
-            stop_bits: uart::StopBits::One,
-            clock: 24_000_000,
-        });
-    }
+    let mut uart_controller = UartController::new(uart_regs);
+    uart_controller.init(&UartConfig::default()).unwrap();
 
     let mut spi_controller = SpiController::new(
         spi1,

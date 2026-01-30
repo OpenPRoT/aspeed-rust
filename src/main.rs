@@ -5,7 +5,7 @@
 
 use core::sync::atomic::AtomicBool;
 // use core::arch::asm;
-use aspeed_ddk::uart::{Config, UartController};
+use aspeed_ddk::uart_core::{UartConfig, UartController};
 use aspeed_ddk::watchdog::WdtController;
 use ast1060_pac::Peripherals;
 use ast1060_pac::{Wdt, Wdt1};
@@ -317,16 +317,10 @@ fn main() -> ! {
     // For jlink attach
     // set aspeed_ddk::__cortex_m_rt_main::HALT.v.value = 0 in gdb
     // debug_halt!();
-    let mut uart_controller = UartController::new(uart, &mut delay);
-    unsafe {
-        uart_controller.init(&Config {
-            baud_rate: 115_200,
-            word_length: aspeed_ddk::uart::WordLength::Eight as u8,
-            parity: aspeed_ddk::uart::Parity::None,
-            stop_bits: aspeed_ddk::uart::StopBits::One,
-            clock: 24_000_000,
-        });
-    }
+    // Get UART register block and create controller
+    let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
+    let mut uart_controller = UartController::new(uart_regs);
+    uart_controller.init(&UartConfig::default()).unwrap();
 
     let hace = peripherals.hace;
     let scu = peripherals.scu;

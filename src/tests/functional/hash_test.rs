@@ -2,7 +2,7 @@
 
 use crate::hace_controller::HaceController;
 use crate::hash::{IntoHashAlgo, Sha256, Sha384, Sha512};
-use crate::uart::UartController;
+use crate::uart_core::UartController;
 use core::any::TypeId;
 use embedded_io::Write;
 use proposed_traits::digest::{DigestAlgorithm, DigestInit, DigestOp};
