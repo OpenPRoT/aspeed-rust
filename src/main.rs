@@ -13,7 +13,7 @@ use ast1060_pac::{Wdt, Wdt1};
 use aspeed_ddk::ecdsa::AspeedEcdsa;
 use aspeed_ddk::hace_controller::HaceController;
 use aspeed_ddk::rsa::AspeedRsa;
-use aspeed_ddk::spi;
+use aspeed_ddk::{i2c_core, spi};
 use aspeed_ddk::syscon::{ClockId, ResetId, SysCon};
 use fugit::MillisDurationU32 as MilliSeconds;
 
@@ -23,6 +23,7 @@ use aspeed_ddk::tests::functional::hash_test::run_hash_tests;
 use aspeed_ddk::tests::functional::hmac_test::run_hmac_tests;
 use aspeed_ddk::tests::functional::i2c_core_test::run_i2c_core_tests;
 use aspeed_ddk::tests::functional::i2c_master_slave_test::run_master_slave_tests;
+use aspeed_ddk::tests::functional::i2c_master_slave_test::run_master_tests;
 use aspeed_ddk::tests::functional::i2c_test;
 use aspeed_ddk::tests::functional::rsa_test::run_rsa_tests;
 use aspeed_ddk::tests::functional::timer_test::run_timer_tests;
@@ -360,7 +361,12 @@ fn main() -> ! {
 
     // Run i2c_core functional tests
     run_i2c_core_tests(&mut uart_controller);
-
+    {
+        //I2C core test on real hardware
+        i2c_core::init_i2c_global();
+        run_master_tests(&mut uart_controller);
+    }
+    
     // Run I2C master-slave hardware integration tests
     run_master_slave_tests(&mut uart_controller);
 
