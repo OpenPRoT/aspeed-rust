@@ -1,11 +1,19 @@
 // Licensed under the Apache-2.0 license
 
 //! Transfer mode implementation
+//!
+//! Note: The `start_transfer`, `start_byte_mode`, and `start_buffer_mode` functions
+//! are kept for potential future use or testing. The main byte/buffer mode logic
+//! is now in master.rs with inline command building for better control.
 
 use super::{constants, controller::Ast1060I2c, error::I2cError, types::I2cXferMode};
 
+#[allow(dead_code)]
 impl<'a> Ast1060I2c<'a> {
     /// Start a transfer (common setup for byte/buffer modes)
+    ///
+    /// Note: Currently unused - byte/buffer mode functions in master.rs
+    /// handle command building directly for better control.
     pub(crate) fn start_transfer(
         &mut self,
         addr: u8,
@@ -37,62 +45,77 @@ impl<'a> Ast1060I2c<'a> {
     }
 
     /// Start transfer in byte mode
+    ///
+    /// Byte mode uses packet mode with single-byte transfers.
+    /// Command register is i2cm18, data register is i2cc08.
     fn start_byte_mode(&mut self, addr: u8, is_read: bool, len: usize) {
-        // For byte mode, we'll use the master command register
-        let mut cmd = constants::AST_I2CM_START_CMD;
+        // Build command: packet mode + address + start
+        let mut cmd = constants::AST_I2CM_PKT_EN
+            | constants::ast_i2cm_pkt_addr(addr)
+            | constants::AST_I2CM_START_CMD;
 
         if is_read {
             cmd |= constants::AST_I2CM_RX_CMD;
+            // For last byte (or single byte), send NACK and STOP
             if len == 1 {
-                cmd |= constants::AST_I2CM_RX_CMD_LAST; // NAK after last byte
+                cmd |= constants::AST_I2CM_RX_CMD_LAST | constants::AST_I2CM_STOP_CMD;
             }
         } else {
             cmd |= constants::AST_I2CM_TX_CMD;
+            // For last byte (or single byte), send STOP
+            if len == 1 {
+                cmd |= constants::AST_I2CM_STOP_CMD;
+            }
         }
 
-        // Set address in data register for byte mode
+        // Issue command to i2cm18 (Master Command Register)
         unsafe {
-            self.regs()
-                .i2cc0c()
-                .write(|w| w.bits(u32::from(addr) << 1 | u32::from(is_read)));
-        }
-
-        // Issue command
-        unsafe {
-            self.regs().i2cm14().write(|w| w.bits(cmd));
+            self.regs().i2cm18().write(|w| w.bits(cmd));
         }
     }
 
     /// Start transfer in buffer mode (up to 32 bytes)
+    ///
+    /// Buffer mode uses packet mode with hardware buffer for multi-byte transfers.
+    /// All command bits go to i2cm18 in a single write.
     fn start_buffer_mode(&mut self, addr: u8, is_read: bool, len: usize) -> Result<(), I2cError> {
         if len > constants::BUFFER_MODE_SIZE {
             return Err(I2cError::Invalid);
         }
 
-        // Use packet mode for buffer transfers
-        let mut cmd = constants::AST_I2CM_PKT_EN;
+        // Configure buffer size in i2cc0c before issuing command
+        #[allow(clippy::cast_possible_truncation)]
+        if is_read {
+            // Set RX buffer size (len - 1)
+            self.regs().i2cc0c().modify(|_, w| unsafe {
+                w.rx_pool_buffer_size().bits((len - 1) as u8)
+            });
+        } else {
+            // Set TX byte count (len - 1)
+            self.regs().i2cc0c().modify(|_, w| unsafe {
+                w.tx_data_byte_count().bits((len - 1) as u8)
+            });
+        }
+
+        // Build command: PKT_EN + address + START + TX/RX + BUFF_EN + STOP
+        let mut cmd = constants::AST_I2CM_PKT_EN
+            | constants::ast_i2cm_pkt_addr(addr)
+            | constants::AST_I2CM_START_CMD;
 
         if is_read {
-            cmd |= constants::AST_I2CM_RX_CMD | constants::AST_I2CM_RX_BUFF_EN;
+            cmd |= constants::AST_I2CM_RX_CMD
+                | constants::AST_I2CM_RX_BUFF_EN
+                | constants::AST_I2CM_RX_CMD_LAST;
         } else {
             cmd |= constants::AST_I2CM_TX_CMD | constants::AST_I2CM_TX_BUFF_EN;
         }
 
-        // Always add stop
+        // Add stop for last chunk
         cmd |= constants::AST_I2CM_STOP_CMD;
 
-        // Build packet command: address in bits [31:24], length in bits [15:8]
-        #[allow(clippy::cast_possible_truncation)]
-        let pkt_cmd = constants::ast_i2cm_pkt_addr(addr) | ((len as u32) << 8);
-
-        // Set packet command
+        // Issue command to i2cm18 (Master Command Register) - single write
         unsafe {
-            self.regs().i2cm18().write(|w| w.bits(pkt_cmd));
-        }
-
-        // Issue command
-        unsafe {
-            self.regs().i2cm14().write(|w| w.bits(cmd));
+            self.regs().i2cm18().write(|w| w.bits(cmd));
         }
 
         Ok(())
