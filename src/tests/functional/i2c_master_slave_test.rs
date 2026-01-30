@@ -124,10 +124,10 @@ impl TestResults {
 /// Tests the `i2c_core` API by reading known registers from the on-board ADT7490.
 /// This mirrors the original `i2c_test.rs` functionality.
 pub fn run_master_tests(uart: &mut UartController<'_>) {
-    let _ = writeln!(uart, "\n========================================");
-    let _ = writeln!(uart, "I2C MASTER Tests (i2c_core API)");
-    let _ = writeln!(uart, "Using ADT7490 @ 0x{ADT7490_ADDRESS:02X}");
-    let _ = writeln!(uart, "========================================\n");
+    let _ = writeln!(uart, "\n========================================\r");
+    let _ = writeln!(uart, "I2C MASTER Tests (i2c_core API)\r");
+    let _ = writeln!(uart, "Using ADT7490 @ 0x{ADT7490_ADDRESS:02X}\r");
+    let _ = writeln!(uart, "========================================\n\r");
 
     let mut results = TestResults::new();
 
@@ -135,14 +135,14 @@ pub fn run_master_tests(uart: &mut UartController<'_>) {
     test_adt7490_write_read(uart, &mut results);
 
     let (passed, failed) = results.summary();
-    let _ = writeln!(uart, "\n========================================");
-    let _ = writeln!(uart, "Master Tests: {passed} passed, {failed} failed");
-    let _ = writeln!(uart, "========================================\n");
+    let _ = writeln!(uart, "\n========================================\r");
+    let _ = writeln!(uart, "Master Tests: {passed} passed, {failed} failed\r");
+    let _ = writeln!(uart, "========================================\n\r");
 }
 
 /// Test reading ADT7490 registers with known default values
 fn test_adt7490_register_reads(uart: &mut UartController<'_>, results: &mut TestResults) {
-    let _ = writeln!(uart, "[TEST] ADT7490 Register Reads");
+    let _ = writeln!(uart, "[TEST] ADT7490 Register Reads\r");
 
     unsafe {
         let peripherals = Peripherals::steal();
@@ -155,7 +155,7 @@ fn test_adt7490_register_reads(uart: &mut UartController<'_>, results: &mut Test
         let buff_regs = &peripherals.i2cbuff1;
 
         let Some(controller_id) = Controller::new(I2C_MASTER_CTRL_ID) else {
-            let _ = writeln!(uart, "  [FAIL] Invalid controller ID");
+            let _ = writeln!(uart, "  [FAIL] Invalid controller ID\r");
             results.fail();
             return;
         };
@@ -178,7 +178,7 @@ fn test_adt7490_register_reads(uart: &mut UartController<'_>, results: &mut Test
         let mut i2c = match Ast1060I2c::new(&controller, config) {
             Ok(m) => m,
             Err(e) => {
-                let _ = writeln!(uart, "  [FAIL] Init error: {e:?}");
+                let _ = writeln!(uart, "  [FAIL] Init error: {e:?}\r");
                 results.fail();
                 return;
             }
@@ -191,10 +191,10 @@ fn test_adt7490_register_reads(uart: &mut UartController<'_>, results: &mut Test
             // Write register address
             match i2c.write(ADT7490_ADDRESS, &buf) {
                 Ok(()) => {
-                    let _ = writeln!(uart, "  Write reg 0x{reg_addr:02X}: OK");
+                    let _ = writeln!(uart, "  Write reg 0x{reg_addr:02X}: OK\r");
                 }
                 Err(e) => {
-                    let _ = writeln!(uart, "  [FAIL] Write reg 0x{reg_addr:02X}: {e:?}");
+                    let _ = writeln!(uart, "  [FAIL] Write reg 0x{reg_addr:02X}: {e:?}\r");
                     results.fail();
                     continue;
                 }
@@ -203,18 +203,18 @@ fn test_adt7490_register_reads(uart: &mut UartController<'_>, results: &mut Test
             // Read register value
             match i2c.read(ADT7490_ADDRESS, &mut buf) {
                 Ok(()) => {
-                    let _ = writeln!(uart, "  Read: 0x{:02X}, expected: 0x{expected:02X}", buf[0]);
+                    let _ = writeln!(uart, "  Read: 0x{:02X}, expected: 0x{expected:02X}\r", buf[0]);
                     if buf[0] == expected {
-                        let _ = writeln!(uart, "  [PASS] Register 0x{reg_addr:02X} matches");
+                        let _ = writeln!(uart, "  [PASS] Register 0x{reg_addr:02X} matches\r");
                         results.pass();
                     } else {
                         let _ =
-                            writeln!(uart, "  [WARN] Value differs (may be OK for dynamic regs)");
+                            writeln!(uart, "  [WARN] Value differs (may be OK for dynamic regs)\r");
                         results.pass(); // Still pass - some regs are dynamic
                     }
                 }
                 Err(e) => {
-                    let _ = writeln!(uart, "  [FAIL] Read reg 0x{reg_addr:02X}: {e:?}");
+                    let _ = writeln!(uart, "  [FAIL] Read reg 0x{reg_addr:02X}: {e:?}\r");
                     results.fail();
                 }
             }
@@ -224,7 +224,7 @@ fn test_adt7490_register_reads(uart: &mut UartController<'_>, results: &mut Test
 
 /// Test write-read sequence to ADT7490
 fn test_adt7490_write_read(uart: &mut UartController<'_>, results: &mut TestResults) {
-    let _ = writeln!(uart, "\n[TEST] ADT7490 Write-Read Sequence");
+    let _ = writeln!(uart, "\n[TEST] ADT7490 Write-Read Sequence\r");
 
     unsafe {
         let peripherals = Peripherals::steal();
@@ -235,7 +235,7 @@ fn test_adt7490_write_read(uart: &mut UartController<'_>, results: &mut TestResu
         let buff_regs = &peripherals.i2cbuff1;
 
         let Some(controller_id) = Controller::new(I2C_MASTER_CTRL_ID) else {
-            let _ = writeln!(uart, "  [FAIL] Invalid controller ID");
+            let _ = writeln!(uart, "  [FAIL] Invalid controller ID\r");
             results.fail();
             return;
         };
@@ -258,7 +258,7 @@ fn test_adt7490_write_read(uart: &mut UartController<'_>, results: &mut TestResu
         let mut i2c = match Ast1060I2c::new(&controller, config) {
             Ok(m) => m,
             Err(e) => {
-                let _ = writeln!(uart, "  [FAIL] Init error: {e:?}");
+                let _ = writeln!(uart, "  [FAIL] Init error: {e:?}\r");
                 results.fail();
                 return;
             }
@@ -268,12 +268,12 @@ fn test_adt7490_write_read(uart: &mut UartController<'_>, results: &mut TestResu
         let reg_addr = [0x3D];
         let mut read_buf = [0u8; 1];
 
-        let _ = writeln!(uart, "  Reading Device ID (reg 0x3D)...");
+        let _ = writeln!(uart, "  Reading Device ID (reg 0x3D)...\r");
 
         match i2c.write(ADT7490_ADDRESS, &reg_addr) {
             Ok(()) => {}
             Err(e) => {
-                let _ = writeln!(uart, "  [FAIL] Write address: {e:?}");
+                let _ = writeln!(uart, "  [FAIL] Write address: {e:?}\r");
                 results.fail();
                 return;
             }
@@ -281,12 +281,12 @@ fn test_adt7490_write_read(uart: &mut UartController<'_>, results: &mut TestResu
 
         match i2c.read(ADT7490_ADDRESS, &mut read_buf) {
             Ok(()) => {
-                let _ = writeln!(uart, "  Device ID: 0x{:02X}", read_buf[0]);
-                let _ = writeln!(uart, "  [PASS] Write-Read sequence completed");
+                let _ = writeln!(uart, "  Device ID: 0x{:02X}\r", read_buf[0]);
+                let _ = writeln!(uart, "  [PASS] Write-Read sequence completed\r");
                 results.pass();
             }
             Err(e) => {
-                let _ = writeln!(uart, "  [FAIL] Read: {e:?}");
+                let _ = writeln!(uart, "  [FAIL] Read: {e:?}\r");
                 results.fail();
             }
         }
