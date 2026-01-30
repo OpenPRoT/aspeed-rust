@@ -22,6 +22,7 @@ use aspeed_ddk::tests::functional::gpio_test;
 use aspeed_ddk::tests::functional::hash_test::run_hash_tests;
 use aspeed_ddk::tests::functional::hmac_test::run_hmac_tests;
 use aspeed_ddk::tests::functional::i2c_core_test::run_i2c_core_tests;
+use aspeed_ddk::tests::functional::i2c_master_slave_test::run_master_slave_tests;
 use aspeed_ddk::tests::functional::i2c_test;
 use aspeed_ddk::tests::functional::rsa_test::run_rsa_tests;
 use aspeed_ddk::tests::functional::timer_test::run_timer_tests;
@@ -365,6 +366,9 @@ fn main() -> ! {
 
     // Run i2c_core functional tests
     run_i2c_core_tests(&mut uart_controller);
+
+    // Run I2C master-slave hardware integration tests
+    run_master_slave_tests(&mut uart_controller);
 
     test_wdt(&mut uart_controller);
     run_timer_tests(&mut uart_controller);
