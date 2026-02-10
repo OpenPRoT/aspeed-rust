@@ -140,8 +140,12 @@ pub const AST_I2CS_TX_CMD: u32 = 1 << 2;
 pub const AST_I2CS_SLAVE_MATCH: u32 = 1 << 7;
 /// STOP condition received
 pub const AST_I2CS_STOP: u32 = 1 << 4;
+/// Slave RX done NACK
+pub const AST_I2CS_RX_DONE_NAK: u32 = 1 << 3;
 /// Slave RX done
 pub const AST_I2CS_RX_DONE: u32 = 1 << 2;
+/// Slave TX got NACK
+pub const AST_I2CS_TX_NAK: u32 = 1 << 1;
 /// Slave TX got ACK
 pub const AST_I2CS_TX_ACK: u32 = 1 << 0;
 /// Slave packet mode done

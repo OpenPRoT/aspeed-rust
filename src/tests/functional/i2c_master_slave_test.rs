@@ -64,7 +64,7 @@ use embedded_io::Write;
 const I2C_MASTER_CTRL_ID: u8 = 1;
 
 /// I2C controller for slave tests
-const I2C_SLAVE_CTRL_ID: u8 = 0;
+const I2C_SLAVE_CTRL_ID: u8 = 2;
 
 /// ADT7490 temperature sensor address (on-board, same as original `i2c_test.rs`)
 const ADT7490_ADDRESS: u8 = 0x2e;
@@ -302,11 +302,11 @@ fn test_adt7490_write_read(uart: &mut UartController<'_>, results: &mut TestResu
 /// Start this BEFORE the external master initiates transactions.
 #[allow(clippy::too_many_lines)]
 pub fn run_slave_tests(uart: &mut UartController<'_>) {
-    let _ = writeln!(uart, "\n========================================");
-    let _ = writeln!(uart, "I2C SLAVE Tests (i2c_core API)");
-    let _ = writeln!(uart, "Slave address: 0x{SLAVE_ADDRESS:02X}");
-    let _ = writeln!(uart, "========================================");
-    let _ = writeln!(uart, "Waiting for external master...\n");
+    let _ = writeln!(uart, "\n========================================\r");
+    let _ = writeln!(uart, "I2C SLAVE Tests (i2c_core API)\r");
+    let _ = writeln!(uart, "Slave address: 0x{SLAVE_ADDRESS:02X}\r");
+    let _ = writeln!(uart, "========================================\r");
+    let _ = writeln!(uart, "Waiting for external master...\n\r");
 
     unsafe {
         run_slave_tests_inner(uart);
@@ -320,17 +320,17 @@ pub fn run_slave_tests(uart: &mut UartController<'_>) {
 unsafe fn run_slave_tests_inner(uart: &mut UartController<'_>) {
     let peripherals = Peripherals::steal();
 
-    // Apply pin control for I2C0 (slave) - Note: uses I2C1 registers in PAC
+    // Apply pin control for I2C2 (slave) - Note: uses I2C1 registers in PAC
     // as there's only one I2C peripheral defined
-    pinctrl::Pinctrl::apply_pinctrl_group(pinctrl::PINCTRL_I2C0);
+    pinctrl::Pinctrl::apply_pinctrl_group(pinctrl::PINCTRL_I2C2);
 
     // Note: PAC only has i2c1/i2cbuff1 - for slave tests we'd need
-    // the actual I2C0 peripheral which may need different handling
-    let i2c_regs = &peripherals.i2c1;
-    let buff_regs = &peripherals.i2cbuff1;
+    // the actual I2C2 peripheral which may need different handling
+    let i2c_regs = &peripherals.i2c2;
+    let buff_regs = &peripherals.i2cbuff2;
 
     let Some(controller_id) = Controller::new(I2C_SLAVE_CTRL_ID) else {
-        let _ = writeln!(uart, "[FAIL] Invalid controller ID");
+        let _ = writeln!(uart, "[FAIL] Invalid controller ID\r");
         return;
     };
 
@@ -352,7 +352,7 @@ unsafe fn run_slave_tests_inner(uart: &mut UartController<'_>) {
     let mut slave = match Ast1060I2c::new(&controller, config) {
         Ok(s) => s,
         Err(e) => {
-            let _ = writeln!(uart, "[FAIL] Init error: {e:?}");
+            let _ = writeln!(uart, "[FAIL] Init error: {e:?}\r");
             return;
         }
     };
@@ -360,33 +360,23 @@ unsafe fn run_slave_tests_inner(uart: &mut UartController<'_>) {
     let slave_cfg = match SlaveConfig::new(SLAVE_ADDRESS) {
         Ok(cfg) => cfg,
         Err(e) => {
-            let _ = writeln!(uart, "[FAIL] Invalid slave config: {e:?}");
+            let _ = writeln!(uart, "[FAIL] Invalid slave config: {e:?}\r");
             return;
         }
     };
 
     if let Err(e) = slave.configure_slave(&slave_cfg) {
-        let _ = writeln!(uart, "[FAIL] Configure slave error: {e:?}");
+        let _ = writeln!(uart, "[FAIL] Configure slave error: {e:?}\r");
         return;
     }
 
-    let _ = writeln!(uart, "[SLAVE] Configured at address 0x{SLAVE_ADDRESS:02X}");
-    let _ = writeln!(
-        uart,
-        "[SLAVE] Pre-loading TX buffer: {TEST_PATTERN_READ:02X?}"
-    );
-
-    // Pre-load transmit buffer for read requests
-    if let Err(e) = slave.slave_write(&TEST_PATTERN_READ) {
-        let _ = writeln!(uart, "[WARN] Failed to pre-load TX buffer: {e:?}");
-    }
-
-    let _ = writeln!(uart, "[SLAVE] Entering event loop...\n");
+    let _ = writeln!(uart, "[SLAVE] Configured at address 0x{SLAVE_ADDRESS:02X}\r");
+    let _ = writeln!(uart, "[SLAVE] Entering event loop...\n\r");
 
     slave_event_loop(uart, &mut slave);
 
     slave.disable_slave();
-    let _ = writeln!(uart, "[SLAVE] Test complete");
+    let _ = writeln!(uart, "[SLAVE] Test complete\r");
 }
 
 /// Slave event loop - handles incoming I2C transactions
@@ -397,32 +387,33 @@ fn slave_event_loop(uart: &mut UartController<'_>, slave: &mut Ast1060I2c<'_>) {
     loop {
         if let Some(event) = slave.handle_slave_interrupt() {
             match event {
-                SlaveEvent::AddressMatch => {
-                    let _ = writeln!(uart, "[SLAVE] Address match");
-                }
                 SlaveEvent::DataReceived { len } => {
-                    let _ = writeln!(uart, "[SLAVE] Received {len} bytes");
+                    let _ = writeln!(uart, "[SLAVE] Received {len} bytes\r");
                     let mut buf = [0u8; 32];
                     if let Ok(n) = slave.slave_read(&mut buf) {
-                        let _ = writeln!(uart, "  Data: {:02X?}", &buf[..n]);
+                        let _ = writeln!(uart, "  Data: {:02X?}\r", &buf[..n]);
                     }
                     transaction_count += 1;
                 }
                 SlaveEvent::ReadRequest => {
+                    let _ = writeln!(uart, "[SLAVE] master read request: i2c on_transaction start\r");
+                }
+                SlaveEvent::DataSent { len } => {
+                    let _ = writeln!(uart, "[SLAVE] Sent {len} bytes\r");
                     let _ = writeln!(
                         uart,
-                        "[SLAVE] Read request - sending {TEST_PATTERN_READ:02X?}"
+                        "sending {:02X?}\r",
+                        &TEST_PATTERN_READ[..len]
                     );
                     let _ = slave.slave_write(&TEST_PATTERN_READ);
                     transaction_count += 1;
                 }
-                SlaveEvent::DataSent { len } => {
-                    let _ = writeln!(uart, "[SLAVE] Sent {len} bytes");
-                }
                 SlaveEvent::Stop => {
-                    let _ = writeln!(uart, "[SLAVE] Stop condition");
+                    let _ = writeln!(uart, "[SLAVE] Stop condition\r");
                 }
-                SlaveEvent::WriteRequest => {}
+                SlaveEvent::WriteRequest => {
+                    let _ = writeln!(uart, "[SLAVE] master write request: i2c on_transaction start\r");
+                }
             }
         }
 
@@ -430,13 +421,13 @@ fn slave_event_loop(uart: &mut UartController<'_>, slave: &mut Ast1060I2c<'_>) {
         if poll_count % 100_000 == 0 {
             let _ = writeln!(
                 uart,
-                "[SLAVE] ... waiting (transactions: {transaction_count})"
+                "[SLAVE] ... waiting (transactions: {transaction_count})\r"
             );
         }
 
         // Exit after some transactions
         if transaction_count >= 10 {
-            let _ = writeln!(uart, "\n[SLAVE] Completed {transaction_count} transactions");
+            let _ = writeln!(uart, "\n[SLAVE] Completed {transaction_count} transactions\r");
             break;
         }
     }

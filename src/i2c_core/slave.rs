@@ -5,6 +5,8 @@
 //! This module provides slave (target) mode functionality for the AST1060 I2C controllers.
 //! In slave mode, the controller responds to requests from an external I2C master.
 
+use crate::i2c_core::I2cXferMode;
+
 use super::{constants, controller::Ast1060I2c, error::I2cError};
 
 /// Hardware buffer size (32 bytes / 8 DWORDs)
@@ -52,8 +54,6 @@ pub enum SlaveEvent {
     DataSent { len: usize },
     /// Stop condition received
     Stop,
-    /// Address matched
-    AddressMatch,
 }
 
 /// Slave mode data buffer for application-level buffering
@@ -123,10 +123,16 @@ impl<'a> Ast1060I2c<'a> {
         // Set slave address
         self.regs()
             .i2cs40()
-            .write(|w| unsafe { w.bits(u32::from(config.address & 0x7F)) });
+            .write(|w| unsafe { w.slave_dev_addr1().bits(config.address)
+                .enbl_slave_dev_addr1only_for_new_reg_mode().bit(true) });
 
         // Clear slave interrupts
         self.clear_slave_interrupts();
+
+        // Enable slave mode
+        self.regs()
+            .i2cc00()
+            .modify(|_, w| w.enbl_slave_fn().set_bit());
 
         // Configure slave mode
         let mut cmd = 0u32;
@@ -136,14 +142,14 @@ impl<'a> Ast1060I2c<'a> {
             cmd |= constants::AST_I2CS_ACTIVE_ALL;
         }
 
-        if config.buffer_mode {
+        if self.xfer_mode == I2cXferMode::BufferMode {
             cmd |= constants::AST_I2CS_RX_BUFF_EN;
+            self.regs()
+                .i2cc0c()
+                .write(|w| unsafe { w.rx_pool_buffer_size().bits(constants::I2C_BUF_SIZE - 1) });
+        } else {
+            cmd &= !constants::AST_I2CS_PKT_MODE_EN;
         }
-
-        // Enable slave mode
-        self.regs()
-            .i2cc00()
-            .modify(|_, w| w.enbl_slave_fn().set_bit());
 
         // Set slave command register
         unsafe {
@@ -215,32 +221,33 @@ impl<'a> Ast1060I2c<'a> {
 
     /// Read data received in slave mode
     pub fn slave_read(&mut self, buffer: &mut [u8]) -> Result<usize, I2cError> {
-        let status = self.regs().i2cs24().read().bits();
 
-        if (status & constants::AST_I2CS_PKT_ERROR) != 0 {
+        // Get receive length from buffer length register
+        if self.xfer_mode == I2cXferMode::BufferMode {
+            let len = self.regs().i2cc0c().read().actual_rxd_pool_buffer_size().bits() as usize;
+            let to_read = len.min(buffer.len()).min(BUFFER_SIZE);
+
+            // Read from buffer
+            self.copy_from_buffer(&mut buffer[..to_read])?;
+
+            // Re-enable RX buffer
+            let mut cmd  = constants::AST_I2CS_ACTIVE_ALL | constants::AST_I2CS_PKT_MODE_EN;
+            cmd |= constants::AST_I2CS_RX_BUFF_EN;
+            unsafe {
+                self.regs().i2cs28().write(|w| w.bits(cmd));
+            }
+
+            Ok(to_read)
+        } else {
+            // byte mode
+            buffer[0] = self.regs().i2cc08().read().rx_byte_buffer().bits();
+
+            let cmd  = constants::AST_I2CS_ACTIVE_ALL;
+            self.regs().i2cs28().write(|w| unsafe { w.bits(cmd) });
+            
             self.clear_slave_interrupts();
-            return Err(I2cError::SlaveError);
+            Ok(1)
         }
-
-        if (status & constants::AST_I2CS_RX_DONE) == 0 {
-            return Ok(0);
-        }
-
-        // Get receive length from DMA/buffer length register
-        let len = self.regs().i2cs2c().read().bits() as usize;
-        let to_read = len.min(buffer.len()).min(BUFFER_SIZE);
-
-        // Read from buffer
-        self.copy_from_buffer(&mut buffer[..to_read])?;
-
-        // Clear RX_DONE interrupt
-        unsafe {
-            self.regs()
-                .i2cs24()
-                .write(|w| w.bits(constants::AST_I2CS_RX_DONE));
-        }
-
-        Ok(to_read)
     }
 
     /// Write data to send in slave mode (in response to read request)
@@ -249,27 +256,35 @@ impl<'a> Ast1060I2c<'a> {
             return Ok(0);
         }
 
-        let to_write = data.len().min(BUFFER_SIZE);
+        if self.xfer_mode == I2cXferMode::BufferMode {
+            let to_write = 1;
 
-        // Copy data to buffer
-        self.copy_to_buffer(&data[..to_write])?;
+            // Copy data to buffer
+            self.copy_to_buffer(&data[..to_write])?;
 
-        // Set transfer length
-        #[allow(clippy::cast_possible_truncation)]
-        unsafe {
-            self.regs().i2cs2c().write(|w| w.bits(to_write as u32));
+            // Set transfer length
+            self.regs()
+                .i2cc0c()
+                .write(|w| unsafe { w.tx_data_byte_count().bits(to_write as u8 - 1) });
+
+            // Trigger slave transmit
+            let mut cmd = constants::AST_I2CS_ACTIVE_ALL | constants::AST_I2CS_PKT_MODE_EN;
+            cmd |= constants::AST_I2CS_TX_BUFF_EN;
+            unsafe {
+                self.regs().i2cs28().write(|w| w.bits(cmd));
+            }
+            Ok(to_write)
+        } else {
+            // byte mode
+            let cmd = constants::AST_I2CS_ACTIVE_ALL | constants::AST_I2CS_TX_CMD;
+            unsafe {
+                self.regs().i2cc08().write(|w| w.tx_byte_buffer().bits(data[0]));
+                self.regs().i2cs28().write(|w| w.bits(cmd));
+            }
+            self.clear_slave_interrupts();
+
+            Ok(1)
         }
-
-        // Trigger slave transmit
-        let mut cmd = self.regs().i2cs28().read().bits();
-        cmd |= constants::AST_I2CS_TX_BUFF_EN;
-        cmd |= constants::AST_I2CS_TX_CMD;
-
-        unsafe {
-            self.regs().i2cs28().write(|w| w.bits(cmd));
-        }
-
-        Ok(to_write)
     }
 
     /// Handle slave mode interrupt
@@ -286,57 +301,128 @@ impl<'a> Ast1060I2c<'a> {
             return None;
         }
 
-        // Address match - master has addressed us
-        if (status & constants::AST_I2CS_SLAVE_MATCH) != 0 {
-            unsafe {
-                self.regs()
-                    .i2cs24()
-                    .write(|w| w.bits(constants::AST_I2CS_SLAVE_MATCH));
-            }
-            return Some(SlaveEvent::AddressMatch);
-        }
-
-        // Check for read request (master wants to read from us)
-        if (status & constants::AST_I2CS_WAIT_TX_DMA) != 0 {
-            return Some(SlaveEvent::ReadRequest);
-        }
-
-        // Check for write complete (we received data)
-        if (status & constants::AST_I2CS_RX_DONE) != 0 {
-            let len = self.regs().i2cs2c().read().bits() as usize;
-            return Some(SlaveEvent::DataReceived { len });
-        }
-
-        // Check for transmit complete
-        if (status & constants::AST_I2CS_TX_ACK) != 0 {
-            let len = self.regs().i2cs2c().read().bits() as usize;
-            unsafe {
-                self.regs()
-                    .i2cs24()
-                    .write(|w| w.bits(constants::AST_I2CS_TX_ACK));
-            }
-            return Some(SlaveEvent::DataSent { len });
-        }
-
-        // Stop condition
-        if (status & constants::AST_I2CS_STOP) != 0 {
-            unsafe {
-                self.regs()
-                    .i2cs24()
-                    .write(|w| w.bits(constants::AST_I2CS_STOP));
-            }
-            return Some(SlaveEvent::Stop);
-        }
-
-        // Packet done
         if (status & constants::AST_I2CS_PKT_DONE) != 0 {
+            let mut cmd: u32 = constants::AST_I2CS_ACTIVE_ALL | constants::AST_I2CS_PKT_MODE_EN;
             unsafe {
                 self.regs()
                     .i2cs24()
                     .write(|w| w.bits(constants::AST_I2CS_PKT_DONE));
             }
-        }
+            let sts = status & (!(constants::AST_I2CS_PKT_DONE | constants::AST_I2CS_PKT_ERROR));
+            if sts == constants::AST_I2CS_SLAVE_MATCH || sts == constants::AST_I2CS_SLAVE_MATCH | constants::AST_I2CS_RX_DONE {
+                // S: Sw
+                return Some(SlaveEvent::WriteRequest);
+            } else if sts == constants::AST_I2CS_SLAVE_MATCH | constants::AST_I2CS_WAIT_RX_DMA
+            || sts == constants::AST_I2CS_SLAVE_MATCH | constants::AST_I2CS_RX_DONE | constants::AST_I2CS_WAIT_RX_DMA {
+                // S: Sw|D
+                cmd |= constants::AST_I2CS_RX_BUFF_EN;
+                unsafe {
+                    self.regs().i2cs28().write(|w| w.bits(cmd));
+                }
+                return Some(SlaveEvent::WriteRequest);
+            } else if sts == constants::AST_I2CS_SLAVE_MATCH | constants::AST_I2CS_STOP {
+                // S: Sw|P
+                cmd |= constants::AST_I2CS_RX_BUFF_EN;
+                unsafe {
+                    self.regs().i2cs28().write(|w| w.bits(cmd));
+                }
+                return Some(SlaveEvent::Stop);
+            } else if sts == constants::AST_I2CS_RX_DONE | constants::AST_I2CS_STOP
+            || sts == constants::AST_I2CS_RX_DONE | constants::AST_I2CS_WAIT_RX_DMA
+            || sts == constants::AST_I2CS_RX_DONE | constants::AST_I2CS_WAIT_RX_DMA | constants::AST_I2CS_STOP
+            || sts == constants::AST_I2CS_RX_DONE_NAK | constants::AST_I2CS_RX_DONE | constants::AST_I2CS_STOP
+            || sts == constants::AST_I2CS_SLAVE_MATCH | constants::AST_I2CS_RX_DONE | constants::AST_I2CS_STOP
+            || sts == constants::AST_I2CS_SLAVE_MATCH | constants::AST_I2CS_RX_DONE | constants::AST_I2CS_WAIT_RX_DMA | constants::AST_I2CS_STOP
+            || sts == constants::AST_I2CS_SLAVE_MATCH | constants::AST_I2CS_RX_DONE_NAK | constants::AST_I2CS_RX_DONE | constants::AST_I2CS_STOP {
+                // S: (Sw)|D|(P)
+                return Some(SlaveEvent::DataReceived{len: usize::from(
+                            self.regs()
+                                .i2cc0c()
+                                .read()
+                                .actual_rxd_pool_buffer_size()
+                                .bits())});
+            } else if sts == constants::AST_I2CS_RX_DONE | constants::AST_I2CS_WAIT_TX_DMA
+                    || sts == constants::AST_I2CS_SLAVE_MATCH | constants::AST_I2CS_RX_DONE | constants::AST_I2CS_WAIT_TX_DMA
+            {
+                // S: rx_done | wait_tx
+                return Some(SlaveEvent::DataSent{len: usize::from(self.regs().i2cc0c().read().tx_data_byte_count().bits() + 1)});
+            } else if sts == constants::AST_I2CS_SLAVE_MATCH | constants::AST_I2CS_WAIT_TX_DMA {
+                // S: Sw | wait_tx
+                return Some(SlaveEvent::DataSent{len: usize::from(self.regs().i2cc0c().read().tx_data_byte_count().bits() + 1)});
+            } else if sts == constants::AST_I2CS_WAIT_TX_DMA {
+                // S: wait_tx
+                return Some(SlaveEvent::DataSent{len: usize::from(self.regs().i2cc0c().read().tx_data_byte_count().bits() + 1)});
+            } else if sts == constants::AST_I2CS_TX_NAK | constants::AST_I2CS_STOP || sts == constants::AST_I2CS_STOP {
+                // S: (TX_NAK)|P
+                self.regs()
+                    .i2cc0c()
+                    .write(|w| unsafe { w.rx_pool_buffer_size().bits(constants::I2C_BUF_SIZE - 1) });
 
+                cmd |= constants::AST_I2CS_RX_BUFF_EN;
+                unsafe {
+                    self.regs().i2cs28().write(|w| w.bits(cmd));
+                }
+            } else {
+                // TODO packet slave sts
+            }
+        } else {
+            //byte irq
+            let mut cmd: u32 = constants::AST_I2CS_ACTIVE_ALL;
+
+            if status == constants::AST_I2CS_SLAVE_MATCH
+                        | constants::AST_I2CS_RX_DONE
+                        | constants::AST_I2CS_WAIT_RX_DMA {
+                // S: Sw|D
+                let byte_data = self.regs().i2cc08().read().rx_byte_buffer().bits();
+                self.regs().i2cs28().write(|w| unsafe { w.bits(cmd) });
+                self.regs().i2cs24().write(|w| unsafe { w.bits(status) });
+                self.regs().i2cs24().read().bits();
+                return Some(SlaveEvent::WriteRequest);
+            } else if status
+                == constants::AST_I2CS_SLAVE_MATCH
+                    | constants::AST_I2CS_RX_DONE
+                    | constants::AST_I2CS_WAIT_RX_DMA
+                    | constants::AST_I2CS_STOP
+                    | constants::AST_I2CS_TX_NAK
+                || status == constants::AST_I2CS_SLAVE_MATCH
+                        | constants::AST_I2CS_RX_DONE
+                        | constants::AST_I2CS_WAIT_RX_DMA
+                        | constants::AST_I2CS_STOP {
+                // S: Sw|D|P
+                let byte_data = self.regs().i2cc08().read().rx_byte_buffer().bits();
+                self.regs().i2cs28().write(|w| unsafe { w.bits(cmd) });
+                self.regs().i2cs24().write(|w| unsafe { w.bits(status) });
+                return Some(SlaveEvent::WriteRequest);
+            } else if status == constants::AST_I2CS_RX_DONE | constants::AST_I2CS_WAIT_RX_DMA {
+                // S: rD
+                return Some(SlaveEvent::DataReceived {len: 1});
+            } else if status == constants::AST_I2CS_SLAVE_MATCH
+                            | constants::AST_I2CS_RX_DONE
+                            | constants::AST_I2CS_WAIT_TX_DMA {
+                // S: Sr|D
+                // received one byte
+                let byte_data = self.regs().i2cc08().read().rx_byte_buffer().bits();
+                return Some(SlaveEvent::DataSent {len: 1});
+            } else if status == constants::AST_I2CS_TX_ACK | constants::AST_I2CS_WAIT_TX_DMA {
+                // S: tD
+                return Some(SlaveEvent::DataSent {len: 1});
+            } else if status == constants::AST_I2CS_STOP
+                || status == constants::AST_I2CS_STOP | constants::AST_I2CS_TX_NAK
+                || status == constants::AST_I2CS_SLAVE_MATCH
+                            | constants::AST_I2CS_STOP
+                            | constants::AST_I2CS_TX_NAK
+                || status == constants::AST_I2CS_SLAVE_MATCH
+                        | constants::AST_I2CS_WAIT_RX_DMA
+                        | constants::AST_I2CS_STOP
+                        | constants::AST_I2CS_TX_NAK {
+                // S: P
+                self.regs().i2cs28().write(|w| unsafe { w.bits(cmd) });
+                self.regs().i2cs24().write(|w| unsafe { w.bits(status) });
+                return Some(SlaveEvent::Stop);
+            } else {
+                // TODO byte slave sts
+            }
+        }
         None
     }
 }

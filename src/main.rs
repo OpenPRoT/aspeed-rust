@@ -23,7 +23,7 @@ use aspeed_ddk::tests::functional::hash_test::run_hash_tests;
 use aspeed_ddk::tests::functional::hmac_test::run_hmac_tests;
 use aspeed_ddk::tests::functional::i2c_core_test::run_i2c_core_tests;
 use aspeed_ddk::tests::functional::i2c_master_slave_test::run_master_slave_tests;
-use aspeed_ddk::tests::functional::i2c_master_slave_test::run_master_tests;
+use aspeed_ddk::tests::functional::i2c_master_slave_test::{run_master_tests, run_slave_tests};
 use aspeed_ddk::tests::functional::i2c_test;
 use aspeed_ddk::tests::functional::rsa_test::run_rsa_tests;
 use aspeed_ddk::tests::functional::timer_test::run_timer_tests;
@@ -364,7 +364,9 @@ fn main() -> ! {
     {
         //I2C core test on real hardware
         i2c_core::init_i2c_global();
-        run_master_tests(&mut uart_controller);
+        //run_master_tests(&mut uart_controller);
+        #[cfg(feature = "i2c_target")]
+        run_slave_tests(&mut uart_controller);
     }
     
     // Run I2C master-slave hardware integration tests
