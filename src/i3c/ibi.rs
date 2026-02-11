@@ -75,7 +75,9 @@ static IBI_WORKQS: [Mutex<RefCell<IbiBus>>; 4] = [
 ///
 /// Returns `false` if bus index is out of range.
 fn ensure_ibiq_split(bus: usize) -> bool {
-    let Some(workq) = IBI_WORKQS.get(bus) else { return false };
+    let Some(workq) = IBI_WORKQS.get(bus) else {
+        return false;
+    };
 
     critical_section::with(|cs| {
         let mut b = workq.borrow(cs).borrow_mut();
@@ -114,7 +116,8 @@ pub fn i3c_ibi_workq_consumer(
 // =============================================================================
 
 /// Enqueue a target dynamic address assignment notification
-#[must_use] pub fn i3c_ibi_work_enqueue_target_da_assignment(bus: usize) -> bool {
+#[must_use]
+pub fn i3c_ibi_work_enqueue_target_da_assignment(bus: usize) -> bool {
     if !ensure_ibiq_split(bus) {
         return false;
     }
@@ -130,7 +133,8 @@ pub fn i3c_ibi_workq_consumer(
 }
 
 /// Enqueue a Hot-Join notification
-#[must_use] pub fn i3c_ibi_work_enqueue_hotjoin(bus: usize) -> bool {
+#[must_use]
+pub fn i3c_ibi_work_enqueue_hotjoin(bus: usize) -> bool {
     if !ensure_ibiq_split(bus) {
         return false;
     }
@@ -146,7 +150,8 @@ pub fn i3c_ibi_workq_consumer(
 }
 
 /// Enqueue a target interrupt (SIR) notification
-#[must_use] pub fn i3c_ibi_work_enqueue_target_irq(bus: usize, addr: u8, data: &[u8]) -> bool {
+#[must_use]
+pub fn i3c_ibi_work_enqueue_target_irq(bus: usize, addr: u8, data: &[u8]) -> bool {
     if !ensure_ibiq_split(bus) {
         return false;
     }
@@ -155,8 +160,8 @@ pub fn i3c_ibi_workq_consumer(
     ibi_buf[..take].copy_from_slice(&data[..take]);
     critical_section::with(|cs| {
         if let Some(workq) = IBI_WORKQS.get(bus) {
-            let mut ibi_bus = workq.borrow(cs).borrow_mut();
-            if let Some(prod) = ibi_bus.prod.as_mut() {
+            let mut i3c_bus = workq.borrow(cs).borrow_mut();
+            if let Some(prod) = i3c_bus.prod.as_mut() {
                 return prod
                     .enqueue(IbiWork::Sirq {
                         addr,

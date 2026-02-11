@@ -1,3 +1,5 @@
+// Licensed under the Apache-2.0 license
+
 #![cfg_attr(not(test), no_std)]
 pub mod astdebug;
 pub mod common;

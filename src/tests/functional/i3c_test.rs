@@ -1,18 +1,17 @@
 // Licensed under the Apache-2.0 license
 
 use crate::common::{DummyDelay, UartLogger};
-use crate::i3c::hardware::Ast1060I3c;
 use crate::i3c::config::I3cConfig;
 use crate::i3c::config::I3cTargetConfig;
 use crate::i3c::constants::I3C_MSG_READ;
 use crate::i3c::constants::I3C_MSG_STOP;
 use crate::i3c::constants::I3C_MSG_WRITE;
 use crate::i3c::controller::I3cController;
+use crate::i3c::hardware::Ast1060I3c;
 use crate::i3c::hardware::HardwareCore;
-use crate::i3c::hardware::HardwareTransfer;
 use crate::i3c::hardware::HardwareTarget;
+use crate::i3c::hardware::HardwareTransfer;
 use crate::i3c::ibi::{i3c_ibi_workq_consumer, IbiWork};
-use proposed_traits::i3c_master::I3c;
 use crate::i3c::types::I3cMsg;
 use crate::pinctrl;
 use crate::uart::{self, Config, UartController};
@@ -20,6 +19,7 @@ use ast1060_pac::Peripherals;
 use core::ptr::read_volatile;
 use embedded_hal::delay::DelayNs;
 use embedded_io::Write;
+use proposed_traits::i3c_master::I3c;
 // I3cTarget
 use proposed_traits::i3c_target::{DynamicAddressable, IBICapable};
 
@@ -42,8 +42,6 @@ pub fn dump_i3c_controller_registers(uart: &mut UartController<'_>, base: u32) {
         }
     }
 }
-
-
 
 #[allow(clippy::too_many_lines)]
 pub fn test_i3c_master(uart: &mut UartController<'_>) {
@@ -80,7 +78,9 @@ pub fn test_i3c_master(uart: &mut UartController<'_>) {
     config.init_runtime_fields();
 
     // Validate Clock Configuration (Requested Pattern)
-    config.validate_clock().expect("Invalid clock configuration");
+    config
+        .validate_clock()
+        .expect("Invalid clock configuration");
 
     // Use Constructor that performs initialization
     let mut ctrl = I3cController::new(hw, config);
@@ -214,7 +214,9 @@ pub fn test_i3c_target(uart: &mut UartController<'_>) {
     config.init_runtime_fields();
 
     // Validate Clock Configuration
-    config.validate_clock().expect("Invalid clock configuration");
+    config
+        .validate_clock()
+        .expect("Invalid clock configuration");
 
     let mut ctrl = I3cController::new(hw, config);
     ctrl.init_hardware();

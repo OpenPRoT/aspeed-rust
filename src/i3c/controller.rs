@@ -203,7 +203,6 @@ impl<H: HardwareInterface> I3cController<H> {
     // Bus Recovery
     // =========================================================================
 
-
     /// Recover the I3C bus from a stuck state
     ///
     /// Performs bus recovery sequence:
