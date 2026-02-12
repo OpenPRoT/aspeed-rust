@@ -16,6 +16,7 @@ pub mod rsa;
 pub mod spi;
 pub mod spimonitor;
 pub mod syscon;
+#[cfg(feature = "isr-handlers")]
 pub mod tests;
 pub mod timer;
 pub mod uart;

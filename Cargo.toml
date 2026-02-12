@@ -17,6 +17,7 @@ edition = "2021"
 [features]
 default = []
 std = []
+isr-handlers = []  # Export ISR handlers with #[no_mangle] - disable for kernel integration
 i2c_target = []
 i3c_master = []
 i3c_target = []
@@ -45,7 +46,3 @@ openprot-hal-blocking = { git="https://github.com/OpenPRoT/openprot" }
 zerocopy = { version = "0.8.25", features = ["derive"] }
 cortex-m-rt = { version = "0.7.5", features = ["device"] }
 panic-halt = "1.0.0"
-
-[patch."https://github.com/AspeedTech-BMC/ast1060-pac.git"]
-ast1060-pac = { path = "ast1060-pac" }
-

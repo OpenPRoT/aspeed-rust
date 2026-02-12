@@ -220,6 +220,7 @@ static mut I2C0_INSTANCE: Option<
 > = None;
 
 #[cfg(feature = "i2c_target")]
+#[cfg(feature = "isr-handlers")]
 #[no_mangle]
 pub extern "C" fn i2c() {
     unsafe {
