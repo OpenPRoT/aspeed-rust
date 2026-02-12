@@ -5,7 +5,7 @@
 use super::fmccontroller::FmcController;
 use crate::common::{self, DmaBuffer, DummyDelay};
 use crate::spi::device::ChipSelectDevice;
-use crate::spi::norflash::{SpiNorData, SpiNorDevice};
+use crate::spi::norflash::{SpiNorCommand, SpiNorDevice};
 use crate::spi::spicontroller::SpiController;
 use crate::spi::spitest::{self, DeviceId, FMC_CONFIG};
 use crate::spi::SpiData;
@@ -365,7 +365,7 @@ pub fn test_fmc_dma_irq(uart: &mut UartController<'_>) {
         let _ = controller.init();
 
         // You can now pass `fmc_ptr` into ChipSelectDevice or use it directly
-        let nor_read_data: SpiNorData<'_> =
+        let nor_read_data: SpiNorCommand<'_> =
             spitest::nor_device_read_data(spitest::FMC_CS0_CAPACITY);
         let nor_write_data = spitest::nor_device_write_data(spitest::FMC_CS0_CAPACITY);
 
@@ -416,7 +416,7 @@ pub fn test_fmc_dma_irq(uart: &mut UartController<'_>) {
             fill_dma_buffer(DmaOp::Read, false, 0);
             dma_irq_chain_test(&start_addrs, DmaOp::Read, false);
         } else {
-            fill_dma_buffer(DmaOp::Program, true, 0x1234);
+            fill_dma_buffer(DmaOp::Program, true, 0x456);
             let _ = dev1.nor_sector_erase(0x0000_0000);
             delay.delay_ns(8_000_000);
             // NOTE: DMA write has an issue in AST2600-Errata-11
@@ -469,7 +469,7 @@ pub fn test_spi_dma_irq(uart: &mut UartController<'_>) {
         let _ = controller.init();
         log_uart!("==== SPI0 DEV0 DMA  Test====");
         // You can now pass `fmc_ptr` into ChipSelectDevice or use it directly
-        let nor_read_data: SpiNorData<'_> =
+        let nor_read_data: SpiNorCommand<'_> =
             spitest::nor_device_read_4b_data(spitest::SPI_CS0_CAPACITY);
         let nor_write_data = spitest::nor_device_write_4b_data(spitest::SPI_CS0_CAPACITY);
 
@@ -496,7 +496,7 @@ pub fn test_spi_dma_irq(uart: &mut UartController<'_>) {
             fill_dma_buffer(DmaOp::ReadFast, false, 0);
             dma_irq_chain_test(&start_addrs, DmaOp::ReadFast, false);
         } else {
-            fill_dma_buffer(DmaOp::Program, true, 0xabc);
+            fill_dma_buffer(DmaOp::Program, true, 0xdeed);
             let _ = dev0.nor_sector_erase(0x0000_0000);
             delay.delay_ns(8_000_000);
             dma_irq_chain_test(&start_addrs, DmaOp::ProgramFast, false);

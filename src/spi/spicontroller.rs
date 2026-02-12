@@ -4,7 +4,7 @@ use super::{
     aspeed_get_spi_freq_div, get_addr_buswidth, get_hclock_rate, get_mid_point_of_longest_one,
     spi_cal_dummy_cycle, spi_calibration_enable, spi_io_mode, spi_io_mode_user, spi_read_data,
     spi_write_data, CtrlType, SpiBusWithCs, SpiConfig, SpiData, SpiError, get_cmd_buswidth,
-    get_data_buswidth
+    get_data_buswidth,DataDirection
 };
 
 use super::consts::{ASPEED_MAX_CS,ASPEED_SPI_NORMAL_READ, ASPEED_SPI_NORMAL_WRITE, ASPEED_SPI_SZ_256M, 
@@ -14,7 +14,7 @@ use super::consts::{ASPEED_MAX_CS,ASPEED_SPI_NORMAL_READ, ASPEED_SPI_NORMAL_WRIT
     SPI_DMA_RAM_MAP_BASE, SPI_DMA_REQUEST, SPI_DMA_STATUS, SPI_DMA_TIMEOUT,
     SPI_CTRL_CEX_4BYTE_MODE_SET, SPI_CTRL_CEX_DUMMY_SHIFT, SPI_CTRL_CEX_SPI_CMD_MASK, 
     SPI_CTRL_CEX_SPI_CMD_SHIFT, SPI_DMA_CLK_FREQ_SHIFT, SPI_DMA_CLK_FREQ_MASK, SPI_DMA_DELAY_MASK, 
-    SPI_DMA_DELAY_SHIFT, SPI_CONF_CE0_ENABLE_WRITE_SHIFT, SPI_NOR_DATA_DIRECT_READ, SPI_NOR_DATA_DIRECT_WRITE};
+    SPI_DMA_DELAY_SHIFT, SPI_CONF_CE0_ENABLE_WRITE_SHIFT};
 
 use embedded_io::Write;
 
@@ -23,7 +23,7 @@ use super::consts::{SPI_DMA_TRIGGER_LEN};
 
 use crate::dbg;
 
-use crate::{common::DummyDelay, spi::norflash::SpiNorData, uart::UartController};
+use crate::{common::DummyDelay, spi::norflash::SpiNorCommand, uart::UartController};
 
 use embedded_hal::{
     delay::DelayNs,
@@ -233,7 +233,7 @@ impl<'a> SpiController<'a> {
         }
     }
 
-    fn spi_nor_read_init(&mut self, cs: usize, op_info: &SpiNorData) {
+    fn spi_nor_read_init(&mut self, cs: usize, op_info: &SpiNorCommand) {
         dbg!(
             self,
             "spi_nor_read_init() cs:{}  master_idx: {}",
@@ -286,7 +286,7 @@ impl<'a> SpiController<'a> {
         self.timing_calibration(cs);
     }
 
-    fn spi_nor_write_init(&mut self, cs: usize, op_info: &SpiNorData) {
+    fn spi_nor_write_init(&mut self, cs: usize, op_info: &SpiNorCommand) {
         let io_mode = spi_io_mode(op_info.mode);
         let dummy = 0;
         let write_cmd = (io_mode
@@ -513,7 +513,7 @@ impl<'a> SpiController<'a> {
         checksum
     }
 
-    fn spi_nor_transceive_user(&mut self, op_info: &mut SpiNorData) {
+    fn spi_nor_transceive_user(&mut self, op_info: &mut SpiNorCommand) {
         let cs: usize = self.current_cs;
         let dummy = [0u8; 12];
         let start_ptr = self.spi_data.decode_addr[cs].start as *mut u32;
@@ -557,7 +557,7 @@ impl<'a> SpiController<'a> {
             | spi_io_mode_user(u32::from(get_data_buswidth(op_info.mode as u32)));
         cs_ctrlreg_w!(self, cs, data_mode);
 
-        if op_info.data_direct == SPI_NOR_DATA_DIRECT_READ {
+        if matches!(op_info.data_direct, DataDirection::DRead) {
             unsafe { spi_read_data(start_ptr, op_info.rx_buf) };
         } else {
             unsafe { spi_write_data(start_ptr, op_info.tx_buf) };
@@ -567,7 +567,7 @@ impl<'a> SpiController<'a> {
 
     // Helper wrappers would be defined for spi_write_data, spi_read_data, io_mode_user, etc.
 
-    pub fn spi_nor_transceive(&mut self, op_info: &mut SpiNorData) -> Result<(), SpiError> {
+    pub fn spi_nor_transceive(&mut self, op_info: &mut SpiNorCommand) -> Result<(), SpiError> {
         dbg!(self, "spi_nor_transceive()...");
 
         #[cfg(feature = "spi_dma")]
@@ -582,7 +582,7 @@ impl<'a> SpiController<'a> {
             );
             let addr_aligned = op_info.addr % 4 == 0;
 
-            if op_info.data_direct == SPI_NOR_DATA_DIRECT_READ {
+            if matches!(op_info.data_direct, DataDirection::DRead) {
                 let buf_aligned = (op_info.rx_buf.as_ptr() as usize) % 4 == 0;
                 let use_dma = !self.spi_config.pure_spi_mode_only
                     && op_info.rx_buf.len() > SPI_DMA_TRIGGER_LEN as usize
@@ -602,7 +602,7 @@ impl<'a> SpiController<'a> {
                 } else {
                     self.spi_nor_transceive_user(op_info);
                 }
-            } else if op_info.data_direct == SPI_NOR_DATA_DIRECT_WRITE {
+            } else if matches!(op_info.data_direct, DataDirection::DWrite) {
                 dbg!(self, "write dma");
 
                 #[cfg(feature = "spi_dma_write")]
@@ -701,7 +701,7 @@ impl<'a> SpiController<'a> {
         //spi_context_complete(ctx, dev, 0);
     }
 
-    pub fn read_dma(&mut self, op: &mut SpiNorData) -> Result<(), SpiError> {
+    pub fn read_dma(&mut self, op: &mut SpiNorCommand) -> Result<(), SpiError> {
         let cs = self.current_cs;
         dbg!(self, "##### read dma ####");
         dbg!(self, "device size: 0x{:08x} dv start: 0x{:08x}, read len: 0x{:08x}, rx_buf:0x{:08x} op addr: 0x{:08x}",
@@ -777,7 +777,7 @@ impl<'a> SpiController<'a> {
     }
 
     #[allow(dead_code)]
-    fn write_dma(&mut self, op: &mut SpiNorData) -> Result<(), SpiError> {
+    fn write_dma(&mut self, op: &mut SpiNorCommand) -> Result<(), SpiError> {
         let cs = self.current_cs;
         //dbg!(self, "##### write_dma ####");
 
@@ -920,16 +920,16 @@ impl<'a> SpiBusWithCs for SpiController<'a> {
         Ok(())
     }
 
-    fn nor_transfer(&mut self, op_info: &mut SpiNorData) -> Result<(), SpiError> {
+    fn nor_transfer(&mut self, op_info: &mut SpiNorCommand) -> Result<(), SpiError> {
         let _ = self.spi_nor_transceive(op_info);
         Ok(())
     }
 
-    fn nor_read_init(&mut self, cs: usize, op_info: &SpiNorData) {
+    fn nor_read_init(&mut self, cs: usize, op_info: &SpiNorCommand) {
         self.spi_nor_read_init(cs, op_info);
     }
 
-    fn nor_write_init(&mut self, cs: usize, op_info: &SpiNorData) {
+    fn nor_write_init(&mut self, cs: usize, op_info: &SpiNorCommand) {
         self.spi_nor_write_init(cs, op_info);
     }
 

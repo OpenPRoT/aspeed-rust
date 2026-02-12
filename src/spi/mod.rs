@@ -23,7 +23,7 @@ pub use error::SpiError;
 pub use traits::SpiBusWithCs;
 pub use types::{CommandMode, CtrlType, DataDirection, SpiConfig, SpiDecodeAddress, SpiData,
     FlashAddress, AddressWidth};
-pub use norflash::{Jesd216Mode, SpiNorData, SpiNorDevice};
+pub use norflash::{Jesd216Mode, SpiNorCommand, SpiNorDevice};
 
 pub use util::{spi_read_data, spi_write_data, aspeed_get_spi_freq_div, get_mid_point_of_longest_one, 
     spi_cal_dummy_cycle, spi_calibration_enable, get_hclock_rate, spi_io_mode, spi_io_mode_user,

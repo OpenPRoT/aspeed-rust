@@ -6,11 +6,10 @@
 use super::device::ChipSelectDevice;
 use super::fmccontroller::FmcController;
 use super::norflash::{
-    Jesd216Mode, SpiNorData, SpiNorDevice, SPI_NOR_CMD_QREAD, SPI_NOR_CMD_READ_FAST_4B,
+    Jesd216Mode, SpiNorCommand, SpiNorDevice, SPI_NOR_CMD_QREAD, SPI_NOR_CMD_READ_FAST_4B,
 };
 use super::{ norflash };
-use super::types::{CommandMode, CtrlType, SpiConfig, SpiData, SpiDecodeAddress};
-use super::consts::{SPI_NOR_DATA_DIRECT_READ, SPI_NOR_DATA_DIRECT_WRITE};
+use super::{CommandMode, CtrlType, SpiConfig, SpiData, SpiDecodeAddress, DataDirection};
 use crate::common::{self, DmaBuffer, DummyDelay};
 use crate::spi::norflashblockdevice;
 use crate::spi::norflashblockdevice::{BlockAddrUsize, NorFlashBlockDevice};
@@ -116,8 +115,8 @@ pub const SPI1_CONFIG: SpiConfig = SpiConfig {
 };
 
 #[must_use]
-pub fn nor_device_read_data<'a>(len: usize) -> SpiNorData<'a> {
-    SpiNorData {
+pub fn nor_device_read_data<'a>(len: usize) -> SpiNorCommand<'a> {
+    SpiNorCommand {
         mode: Jesd216Mode::Mode114,
         opcode: SPI_NOR_CMD_QREAD,
         dummy_cycle: 8,
@@ -126,13 +125,13 @@ pub fn nor_device_read_data<'a>(len: usize) -> SpiNorData<'a> {
         data_len: u32::try_from(len).unwrap(),
         tx_buf: &[],
         rx_buf: &mut [],
-        data_direct: SPI_NOR_DATA_DIRECT_READ,
+        data_direct: DataDirection::DRead,
     }
 }
 
 #[must_use]
-pub fn nor_device_write_data<'a>(len: usize) -> SpiNorData<'a> {
-    SpiNorData {
+pub fn nor_device_write_data<'a>(len: usize) -> SpiNorCommand<'a> {
+    SpiNorCommand {
         mode: Jesd216Mode::Mode111,
         opcode: norflash::SPI_NOR_CMD_PP,
         dummy_cycle: 0,
@@ -141,13 +140,13 @@ pub fn nor_device_write_data<'a>(len: usize) -> SpiNorData<'a> {
         data_len: u32::try_from(len).unwrap(),
         tx_buf: &[],
         rx_buf: &mut [],
-        data_direct: SPI_NOR_DATA_DIRECT_WRITE,
+        data_direct: DataDirection::DWrite,
     }
 }
 
 #[must_use]
-pub fn nor_device_read_4b_data<'a>(len: usize) -> SpiNorData<'a> {
-    SpiNorData {
+pub fn nor_device_read_4b_data<'a>(len: usize) -> SpiNorCommand<'a> {
+    SpiNorCommand {
         mode: Jesd216Mode::Mode111Fast,
         opcode: SPI_NOR_CMD_READ_FAST_4B,
         dummy_cycle: 8,
@@ -156,13 +155,13 @@ pub fn nor_device_read_4b_data<'a>(len: usize) -> SpiNorData<'a> {
         data_len: u32::try_from(len).unwrap(),
         tx_buf: &[],
         rx_buf: &mut [],
-        data_direct: SPI_NOR_DATA_DIRECT_READ,
+        data_direct: DataDirection::DRead,
     }
 }
 
 #[must_use]
-pub fn nor_device_write_4b_data<'a>(len: usize) -> SpiNorData<'a> {
-    SpiNorData {
+pub fn nor_device_write_4b_data<'a>(len: usize) -> SpiNorCommand<'a> {
+    SpiNorCommand {
         mode: Jesd216Mode::Mode111,
         opcode: norflash::SPI_NOR_CMD_PP_4B,
         dummy_cycle: 0,
@@ -171,7 +170,7 @@ pub fn nor_device_write_4b_data<'a>(len: usize) -> SpiNorData<'a> {
         data_len: u32::try_from(len).unwrap(),
         tx_buf: &[],
         rx_buf: &mut [],
-        data_direct: SPI_NOR_DATA_DIRECT_WRITE,
+        data_direct: DataDirection::DWrite,
     }
 }
 
@@ -345,7 +344,7 @@ pub fn test_fmc(uart: &mut UartController<'_>) {
     let _result = controller.init();
     //astdebug::print_reg_u32(uart, FMC_CTRL_BASE, 0xb0);
 
-    let nor_read_data: SpiNorData<'_> = nor_device_read_data(FMC_CS0_CAPACITY);
+    let nor_read_data: SpiNorCommand<'_> = nor_device_read_data(FMC_CS0_CAPACITY);
     let nor_write_data = nor_device_write_data(FMC_CS0_CAPACITY);
 
     // Wrap controller in a CS device (CS0)
@@ -440,7 +439,7 @@ pub fn test_spi(uart: &mut UartController<'_>) {
         spim: Some(SpiMonitorNum::SPIM0),
     };
 
-    let nor_read_data: SpiNorData<'_> = nor_device_read_4b_data(SPI_CS0_CAPACITY);
+    let nor_read_data: SpiNorCommand<'_> = nor_device_read_4b_data(SPI_CS0_CAPACITY);
     let nor_write_data = nor_device_write_4b_data(SPI_CS0_CAPACITY);
 
     let _ = flash_device.nor_read_init(&nor_read_data);
@@ -669,7 +668,7 @@ pub fn test_spi2(uart: &mut UartController<'_>) {
 
     let _result = spi_controller.init();
     astdebug::print_reg_u32(uart, SPI1_CTRL_BASE, 0xb0);
-    let nor_read_data: SpiNorData<'_> = nor_device_read_4b_data(SPI_CS0_CAPACITY);
+    let nor_read_data: SpiNorCommand<'_> = nor_device_read_4b_data(SPI_CS0_CAPACITY);
     let nor_write_data = nor_device_write_4b_data(SPI_CS0_CAPACITY);
 
     // Wrap controller in a CS device (CS0)

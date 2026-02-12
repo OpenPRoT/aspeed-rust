@@ -4,9 +4,8 @@ use super::consts::ASPEED_MAX_CS;
 
 #[derive(Clone, Copy)]
 pub enum DataDirection {
-    Read,
-    Write,
-
+    DRead,
+    DWrite,
 }
 
 pub struct FlashAddress {

@@ -2,8 +2,7 @@
 
 use super::device::ChipSelectDevice;
 use super::SpiBusWithCs;
-use super::{norflash, SpiError};
-use super::consts::{SPI_NOR_DATA_DIRECT_READ, SPI_NOR_DATA_DIRECT_WRITE};
+use super::{norflash, SpiError,DataDirection};
 use crate::common::DummyDelay;
 use embedded_hal::delay::DelayNs;
 
@@ -89,7 +88,7 @@ pub enum Jesd216Mode {
     Unknown = 0xFFF_FFFF,
 }
 
-pub struct SpiNorData<'a> {
+pub struct SpiNorCommand<'a> {
     pub mode: Jesd216Mode,
     pub opcode: u32,
     pub dummy_cycle: u32,
@@ -98,13 +97,13 @@ pub struct SpiNorData<'a> {
     pub data_len: u32,
     pub tx_buf: &'a [u8],
     pub rx_buf: &'a mut [u8],
-    pub data_direct: u32,
+    pub data_direct: DataDirection,
 }
 
 pub trait SpiNorDevice {
     type Error;
-    fn nor_read_init(&mut self, data: &SpiNorData) -> Result<(), Self::Error>;
-    fn nor_write_init(&mut self, data: &SpiNorData) -> Result<(), Self::Error>;
+    fn nor_read_init(&mut self, data: &SpiNorCommand) -> Result<(), Self::Error>;
+    fn nor_write_init(&mut self, data: &SpiNorCommand) -> Result<(), Self::Error>;
     fn nor_write_enable(&mut self) -> Result<(), Self::Error>;
     fn nor_write_disable(&mut self) -> Result<(), Self::Error>;
     fn nor_read_jedec_id(&mut self) -> Result<[u8; 3], Self::Error>;
@@ -153,14 +152,14 @@ where
     type Error = B::Error;
 
     fn nor_write_enable(&mut self) -> Result<(), Self::Error> {
-        let mut nor_data = SpiNorData {
+        let mut nor_data = SpiNorCommand {
             mode: Jesd216Mode::Mode111,
             opcode: SPI_NOR_CMD_WREN,
             dummy_cycle: 0,
             addr: 0,
             addr_len: 0,
             data_len: 0,
-            data_direct: SPI_NOR_DATA_DIRECT_WRITE,
+            data_direct: DataDirection::DWrite,
             tx_buf: &[],
             rx_buf: &mut [],
         };
@@ -169,14 +168,14 @@ where
     }
 
     fn nor_write_disable(&mut self) -> Result<(), Self::Error> {
-        let mut nor_data = SpiNorData {
+        let mut nor_data = SpiNorCommand {
             mode: Jesd216Mode::Mode111,
             opcode: SPI_NOR_CMD_WRDI,
             dummy_cycle: 0,
             addr: 0,
             addr_len: 0,
             data_len: 0,
-            data_direct: SPI_NOR_DATA_DIRECT_WRITE,
+            data_direct: DataDirection::DWrite,
             tx_buf: &[],
             rx_buf: &mut [],
         };
@@ -186,7 +185,7 @@ where
 
     fn nor_read_jedec_id(&mut self) -> Result<[u8; 3], Self::Error> {
         let mut read_buf: [u8; 3] = [0, 0, 0];
-        let mut nor_data = SpiNorData {
+        let mut nor_data = SpiNorCommand {
             mode: Jesd216Mode::Mode111,
             opcode: 0x9F,
             dummy_cycle: 0,
@@ -195,7 +194,7 @@ where
             data_len: 0,
             rx_buf: &mut read_buf,
             tx_buf: &[],
-            data_direct: SPI_NOR_DATA_DIRECT_READ,
+            data_direct: DataDirection::DRead,
         };
         start_transfer!(self, &mut nor_data);
         Ok([read_buf[0], read_buf[1], read_buf[2]])
@@ -204,7 +203,7 @@ where
     fn nor_sector_erase(&mut self, address: u32) -> Result<(), Self::Error> {
         self.nor_write_enable()?;
         if self.nor_sector_aligned(address) {
-            let mut nor_data = SpiNorData {
+            let mut nor_data = SpiNorCommand {
                 mode: Jesd216Mode::Mode111,
                 opcode: norflash::SPI_NOR_CMD_SE,
                 dummy_cycle: 0,
@@ -213,7 +212,7 @@ where
                 data_len: 0,
                 tx_buf: &[],
                 rx_buf: &mut [],
-                data_direct: SPI_NOR_DATA_DIRECT_WRITE,
+                data_direct: DataDirection::DWrite,
             };
             start_transfer!(self, &mut nor_data);
             self.nor_wait_until_ready();
@@ -225,7 +224,7 @@ where
 
     fn nor_page_program(&mut self, address: u32, data: &[u8]) -> Result<(), Self::Error> {
         self.nor_write_enable()?;
-        let mut nor_data = SpiNorData {
+        let mut nor_data = SpiNorCommand {
             mode: Jesd216Mode::Mode111,
             opcode: norflash::SPI_NOR_CMD_PP,
             dummy_cycle: 0,
@@ -234,7 +233,7 @@ where
             data_len: u32::try_from(data.len()).unwrap(),
             tx_buf: data,
             rx_buf: &mut [],
-            data_direct: SPI_NOR_DATA_DIRECT_WRITE,
+            data_direct: DataDirection::DWrite,
         };
         start_transfer!(self, &mut nor_data);
         Ok(())
@@ -242,7 +241,7 @@ where
 
     fn nor_page_program_4b(&mut self, address: u32, data: &[u8]) -> Result<(), Self::Error> {
         self.nor_write_enable()?;
-        let mut nor_data = SpiNorData {
+        let mut nor_data = SpiNorCommand {
             mode: Jesd216Mode::Mode111,
             opcode: norflash::SPI_NOR_CMD_PP_4B,
             dummy_cycle: 0,
@@ -251,14 +250,14 @@ where
             data_len: u32::try_from(data.len()).unwrap(),
             tx_buf: data,
             rx_buf: &mut [],
-            data_direct: SPI_NOR_DATA_DIRECT_WRITE,
+            data_direct: DataDirection::DWrite,
         };
         start_transfer!(self, &mut nor_data);
         Ok(())
     }
 
     fn nor_read_data(&mut self, address: u32, buf: &mut [u8]) -> Result<(), Self::Error> {
-        let mut nor_data = SpiNorData {
+        let mut nor_data = SpiNorCommand {
             mode: Jesd216Mode::Mode114,
             opcode: SPI_NOR_CMD_QREAD,
             dummy_cycle: 8,
@@ -267,14 +266,14 @@ where
             data_len: u32::try_from(buf.len()).unwrap(), // it is not in used.
             tx_buf: &[],
             rx_buf: buf,
-            data_direct: SPI_NOR_DATA_DIRECT_READ,
+            data_direct: DataDirection::DRead,
         };
         start_transfer!(self, &mut nor_data);
         Ok(())
     }
 
     fn nor_read_fast_4b_data(&mut self, address: u32, buf: &mut [u8]) -> Result<(), Self::Error> {
-        let mut nor_data = SpiNorData {
+        let mut nor_data = SpiNorCommand {
             mode: Jesd216Mode::Mode111Fast,
             opcode: SPI_NOR_CMD_READ_FAST_4B,
             dummy_cycle: 8,
@@ -283,7 +282,7 @@ where
             data_len: u32::try_from(buf.len()).unwrap(), // it is not in used.
             tx_buf: &[],
             rx_buf: buf,
-            data_direct: SPI_NOR_DATA_DIRECT_READ,
+            data_direct: DataDirection::DRead,
         };
         start_transfer!(self, &mut nor_data);
 
@@ -291,7 +290,7 @@ where
     }
 
     fn nor_reset_enable(&mut self) -> Result<(), Self::Error> {
-        let mut nor_data = SpiNorData {
+        let mut nor_data = SpiNorCommand {
             mode: Jesd216Mode::Mode111,
             opcode: SPI_NOR_CMD_RESET_EN,
             dummy_cycle: 0,
@@ -300,14 +299,14 @@ where
             data_len: 0x0, // it is not in used.
             tx_buf: &[],
             rx_buf: &mut [],
-            data_direct: SPI_NOR_DATA_DIRECT_WRITE,
+            data_direct: DataDirection::DWrite,
         };
         start_transfer!(self, &mut nor_data);
         Ok(())
     }
 
     fn nor_reset(&mut self) -> Result<(), Self::Error> {
-        let mut nor_data = SpiNorData {
+        let mut nor_data = SpiNorCommand {
             mode: Jesd216Mode::Mode111,
             opcode: SPI_NOR_CMD_RESET_MEM,
             dummy_cycle: 0,
@@ -316,14 +315,14 @@ where
             data_len: 0x0, // it is not in used.
             tx_buf: &[],
             rx_buf: &mut [],
-            data_direct: SPI_NOR_DATA_DIRECT_WRITE,
+            data_direct: DataDirection::DWrite,
         };
         start_transfer!(self, &mut nor_data);
 
         Ok(())
     }
 
-    fn nor_read_init(&mut self, nor_data: &SpiNorData) -> Result<(), Self::Error> {
+    fn nor_read_init(&mut self, nor_data: &SpiNorCommand) -> Result<(), Self::Error> {
         if let Some(spim) = self.spim {
             if self.bus.get_master_id() != 0 {
                 super::spim_scu_ctrl_set(0x8, 0x8);
@@ -343,7 +342,7 @@ where
         Ok(())
     }
 
-    fn nor_write_init(&mut self, nor_data: &SpiNorData) -> Result<(), Self::Error> {
+    fn nor_write_init(&mut self, nor_data: &SpiNorCommand) -> Result<(), Self::Error> {
         self.bus.nor_write_init(self.cs, nor_data);
         Ok(())
     }
@@ -359,7 +358,7 @@ where
         let mut delay = DummyDelay {};
         let mut buf: [u8; 1] = [0u8];
 
-        let mut nor_data = SpiNorData {
+        let mut nor_data = SpiNorCommand {
             mode: Jesd216Mode::Mode111,
             opcode: SPI_NOR_CMD_RDSR,
             dummy_cycle: 0,
@@ -368,7 +367,7 @@ where
             data_len: 1, // it is not in used.
             tx_buf: &[],
             rx_buf: &mut buf,
-            data_direct: SPI_NOR_DATA_DIRECT_READ,
+            data_direct: DataDirection::DRead,
         };
         loop {
             start_transfer!(self, &mut nor_data);
