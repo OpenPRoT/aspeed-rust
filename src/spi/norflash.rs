@@ -2,7 +2,7 @@
 
 use super::device::ChipSelectDevice;
 use super::SpiBusWithCs;
-use super::{norflash, SpiError,DataDirection};
+use super::{norflash, SpiError,DataDirection, FlashAddress, AddressWidth};
 use crate::common::DummyDelay;
 use embedded_hal::delay::DelayNs;
 
@@ -92,8 +92,7 @@ pub struct SpiNorCommand<'a> {
     pub mode: Jesd216Mode,
     pub opcode: u32,
     pub dummy_cycle: u32,
-    pub addr_len: u32,
-    pub addr: u32,
+    pub address: FlashAddress,
     pub data_len: u32,
     pub tx_buf: &'a [u8],
     pub rx_buf: &'a mut [u8],
@@ -156,8 +155,7 @@ where
             mode: Jesd216Mode::Mode111,
             opcode: SPI_NOR_CMD_WREN,
             dummy_cycle: 0,
-            addr: 0,
-            addr_len: 0,
+            address: FlashAddress { value: 0, width: AddressWidth::None },
             data_len: 0,
             data_direct: DataDirection::DWrite,
             tx_buf: &[],
@@ -172,8 +170,7 @@ where
             mode: Jesd216Mode::Mode111,
             opcode: SPI_NOR_CMD_WRDI,
             dummy_cycle: 0,
-            addr: 0,
-            addr_len: 0,
+            address: FlashAddress { value: 0, width: AddressWidth::None },
             data_len: 0,
             data_direct: DataDirection::DWrite,
             tx_buf: &[],
@@ -189,8 +186,7 @@ where
             mode: Jesd216Mode::Mode111,
             opcode: 0x9F,
             dummy_cycle: 0,
-            addr: 0,
-            addr_len: 0,
+            address: FlashAddress { value: 0, width: AddressWidth::None },
             data_len: 0,
             rx_buf: &mut read_buf,
             tx_buf: &[],
@@ -200,15 +196,14 @@ where
         Ok([read_buf[0], read_buf[1], read_buf[2]])
     }
 
-    fn nor_sector_erase(&mut self, address: u32) -> Result<(), Self::Error> {
+    fn nor_sector_erase(&mut self, addr: u32) -> Result<(), Self::Error> {
         self.nor_write_enable()?;
-        if self.nor_sector_aligned(address) {
+        if self.nor_sector_aligned(addr) {
             let mut nor_data = SpiNorCommand {
                 mode: Jesd216Mode::Mode111,
                 opcode: norflash::SPI_NOR_CMD_SE,
                 dummy_cycle: 0,
-                addr: address,
-                addr_len: 3,
+                address: FlashAddress { value: addr, width: AddressWidth::ThreeByte },
                 data_len: 0,
                 tx_buf: &[],
                 rx_buf: &mut [],
@@ -218,18 +213,17 @@ where
             self.nor_wait_until_ready();
             Ok(())
         } else {
-            Err(SpiError::AddressNotAligned(address))
+            Err(SpiError::AddressNotAligned(addr))
         }
     }
 
-    fn nor_page_program(&mut self, address: u32, data: &[u8]) -> Result<(), Self::Error> {
+    fn nor_page_program(&mut self, addr: u32, data: &[u8]) -> Result<(), Self::Error> {
         self.nor_write_enable()?;
         let mut nor_data = SpiNorCommand {
             mode: Jesd216Mode::Mode111,
             opcode: norflash::SPI_NOR_CMD_PP,
             dummy_cycle: 0,
-            addr: address,
-            addr_len: 3,
+            address: FlashAddress { value: addr, width: AddressWidth::ThreeByte },
             data_len: u32::try_from(data.len()).unwrap(),
             tx_buf: data,
             rx_buf: &mut [],
@@ -239,14 +233,13 @@ where
         Ok(())
     }
 
-    fn nor_page_program_4b(&mut self, address: u32, data: &[u8]) -> Result<(), Self::Error> {
+    fn nor_page_program_4b(&mut self, addr: u32, data: &[u8]) -> Result<(), Self::Error> {
         self.nor_write_enable()?;
         let mut nor_data = SpiNorCommand {
             mode: Jesd216Mode::Mode111,
             opcode: norflash::SPI_NOR_CMD_PP_4B,
             dummy_cycle: 0,
-            addr: address,
-            addr_len: 4,
+            address: FlashAddress { value: addr, width: AddressWidth::FourByte },
             data_len: u32::try_from(data.len()).unwrap(),
             tx_buf: data,
             rx_buf: &mut [],
@@ -256,14 +249,13 @@ where
         Ok(())
     }
 
-    fn nor_read_data(&mut self, address: u32, buf: &mut [u8]) -> Result<(), Self::Error> {
+    fn nor_read_data(&mut self, addr: u32, buf: &mut [u8]) -> Result<(), Self::Error> {
         let mut nor_data = SpiNorCommand {
             mode: Jesd216Mode::Mode114,
             opcode: SPI_NOR_CMD_QREAD,
             dummy_cycle: 8,
-            addr: address,
-            addr_len: 3,
-            data_len: u32::try_from(buf.len()).unwrap(), // it is not in used.
+            address: FlashAddress { value: addr, width: AddressWidth::ThreeByte },
+            data_len: u32::try_from(buf.len()).unwrap(),
             tx_buf: &[],
             rx_buf: buf,
             data_direct: DataDirection::DRead,
@@ -272,14 +264,13 @@ where
         Ok(())
     }
 
-    fn nor_read_fast_4b_data(&mut self, address: u32, buf: &mut [u8]) -> Result<(), Self::Error> {
+    fn nor_read_fast_4b_data(&mut self, addr: u32, buf: &mut [u8]) -> Result<(), Self::Error> {
         let mut nor_data = SpiNorCommand {
             mode: Jesd216Mode::Mode111Fast,
             opcode: SPI_NOR_CMD_READ_FAST_4B,
             dummy_cycle: 8,
-            addr: address,
-            addr_len: 4,
-            data_len: u32::try_from(buf.len()).unwrap(), // it is not in used.
+            address: FlashAddress { value: addr, width: AddressWidth::FourByte },
+            data_len: u32::try_from(buf.len()).unwrap(),
             tx_buf: &[],
             rx_buf: buf,
             data_direct: DataDirection::DRead,
@@ -294,9 +285,8 @@ where
             mode: Jesd216Mode::Mode111,
             opcode: SPI_NOR_CMD_RESET_EN,
             dummy_cycle: 0,
-            addr: 0x0,
-            addr_len: 0x0,
-            data_len: 0x0, // it is not in used.
+            address: FlashAddress { value: 0x0, width: AddressWidth::None },
+            data_len: 0,
             tx_buf: &[],
             rx_buf: &mut [],
             data_direct: DataDirection::DWrite,
@@ -310,9 +300,8 @@ where
             mode: Jesd216Mode::Mode111,
             opcode: SPI_NOR_CMD_RESET_MEM,
             dummy_cycle: 0,
-            addr: 0x0,
-            addr_len: 0x0,
-            data_len: 0x0, // it is not in used.
+            address: FlashAddress { value: 0x0, width: AddressWidth::None },
+            data_len: 0x0,
             tx_buf: &[],
             rx_buf: &mut [],
             data_direct: DataDirection::DWrite,
@@ -347,11 +336,11 @@ where
         Ok(())
     }
 
-    fn nor_sector_aligned(&mut self, address: u32) -> bool {
+    fn nor_sector_aligned(&mut self, addr: u32) -> bool {
         //let (flash_sz, sector_sz) = self.bus.get_device_info(self.cs);
         let bits = 12;
         let mask = (1 << bits) - 1;
-        (address & mask) == 0
+        (addr & mask) == 0
     }
 
     fn nor_wait_until_ready(&mut self) {
@@ -362,9 +351,8 @@ where
             mode: Jesd216Mode::Mode111,
             opcode: SPI_NOR_CMD_RDSR,
             dummy_cycle: 0,
-            addr: 0,
-            addr_len: 0,
-            data_len: 1, // it is not in used.
+            address: FlashAddress { value: 0, width: AddressWidth::None },
+            data_len: 1,
             tx_buf: &[],
             rx_buf: &mut buf,
             data_direct: DataDirection::DRead,

@@ -16,6 +16,7 @@ pub struct FlashAddress {
 pub enum AddressWidth {
     ThreeByte,
     FourByte,
+    None,
 }
 
 #[derive(Clone, Copy)]

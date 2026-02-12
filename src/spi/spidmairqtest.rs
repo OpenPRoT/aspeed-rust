@@ -416,7 +416,7 @@ pub fn test_fmc_dma_irq(uart: &mut UartController<'_>) {
             fill_dma_buffer(DmaOp::Read, false, 0);
             dma_irq_chain_test(&start_addrs, DmaOp::Read, false);
         } else {
-            fill_dma_buffer(DmaOp::Program, true, 0x456);
+            fill_dma_buffer(DmaOp::Program, true, 0xfed);
             let _ = dev1.nor_sector_erase(0x0000_0000);
             delay.delay_ns(8_000_000);
             // NOTE: DMA write has an issue in AST2600-Errata-11
@@ -496,7 +496,7 @@ pub fn test_spi_dma_irq(uart: &mut UartController<'_>) {
             fill_dma_buffer(DmaOp::ReadFast, false, 0);
             dma_irq_chain_test(&start_addrs, DmaOp::ReadFast, false);
         } else {
-            fill_dma_buffer(DmaOp::Program, true, 0xdeed);
+            fill_dma_buffer(DmaOp::Program, true, 0xce12);
             let _ = dev0.nor_sector_erase(0x0000_0000);
             delay.delay_ns(8_000_000);
             dma_irq_chain_test(&start_addrs, DmaOp::ProgramFast, false);

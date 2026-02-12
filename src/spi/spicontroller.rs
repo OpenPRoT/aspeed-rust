@@ -4,7 +4,7 @@ use super::{
     aspeed_get_spi_freq_div, get_addr_buswidth, get_hclock_rate, get_mid_point_of_longest_one,
     spi_cal_dummy_cycle, spi_calibration_enable, spi_io_mode, spi_io_mode_user, spi_read_data,
     spi_write_data, CtrlType, SpiBusWithCs, SpiConfig, SpiData, SpiError, get_cmd_buswidth,
-    get_data_buswidth,DataDirection
+    get_data_buswidth, DataDirection, AddressWidth, FlashAddress
 };
 
 use super::consts::{ASPEED_MAX_CS,ASPEED_SPI_NORMAL_READ, ASPEED_SPI_NORMAL_WRITE, ASPEED_SPI_SZ_256M, 
@@ -256,16 +256,18 @@ impl<'a> SpiController<'a> {
         self.spi_data.cmd_mode[cs].normal_read = read_cmd;
         dbg!(
             self,
-            "cs: {:08x}, io_mode: {:08x}, dummy: {:08x}, op: {:08x}, normal read: {:08x}",
+            "cs: {:08x}, io_mode: {:08x}, dummy: {:08x}, op: {:08x}, normal read: {:08x}, 
+            address{:08x}",
             cs,
             io_mode,
             dummy,
             op_info.opcode,
-            read_cmd
+            read_cmd,
+            op_info.address.value
         );
 
         cs_ctrlreg_w!(self, cs, read_cmd);
-        if op_info.addr_len == 4 {
+        if matches!(op_info.address.width, AddressWidth::FourByte) {
             self.regs.spi004().modify(|r, w| unsafe {
                 let current = r.bits();
                 w.bits(current | (SPI_CTRL_CEX_4BYTE_MODE_SET << cs))
@@ -274,7 +276,7 @@ impl<'a> SpiController<'a> {
         if matches!(self.spi_config.ctrl_type, CtrlType::HostSpi) {
             self.regs.spi06c().modify(|r, w| unsafe {
                 let mut current = r.bits();
-                if op_info.addr_len == 4 {
+                if matches!(op_info.address.width, AddressWidth::FourByte) {
                     current = (current & 0xffff_00ff) | (op_info.opcode << 8);
                 } else {
                     current = (current & 0xffff_ff00) | op_info.opcode;
@@ -304,7 +306,7 @@ impl<'a> SpiController<'a> {
 
             self.regs.spi074().modify(|r, w| unsafe {
                 let mut current = r.bits();
-                if op_info.addr_len == 4 {
+                if matches!(op_info.address.width, AddressWidth::FourByte) {
                     current = (current & 0xffff_00ff) | (op_info.opcode << 8);
                 } else {
                     current = (current & 0xffff_ff00) | op_info.opcode;
@@ -536,13 +538,17 @@ impl<'a> SpiController<'a> {
             | spi_io_mode_user(u32::from(get_addr_buswidth(op_info.mode as u32)));
         cs_ctrlreg_w!(self, cs, addr_mode);
 
-        let mut addr = op_info.addr;
-        if op_info.addr_len == 3 {
-            addr <<= 8;
+        let be = op_info.address.value.to_be_bytes();
+
+        let bytes = match op_info.address.width {
+             AddressWidth::ThreeByte => &be[1..], // last 3 bytes (24-bit)
+             AddressWidth::FourByte =>  &be[..],
+             AddressWidth::None => &[],
+        };
+
+        unsafe {
+            super::spi_write_data(start_ptr, bytes);
         }
-        //op_info.addr = sys_cpu_to_be32(op_info.addr);
-        let addr_bytes = addr.to_be_bytes();
-        unsafe { spi_write_data(start_ptr, &addr_bytes[..op_info.addr_len as usize]) };
 
         // Dummy cycles
         let bus_width: u8 = get_addr_buswidth(op_info.mode as u32);
@@ -580,7 +586,7 @@ impl<'a> SpiController<'a> {
                 op_info.tx_buf.as_ptr(),
                 op_info.tx_buf.len()
             );
-            let addr_aligned = op_info.addr % 4 == 0;
+            let addr_aligned = op_info.address.value % 4 == 0;
 
             if matches!(op_info.data_direct, DataDirection::DRead) {
                 let buf_aligned = (op_info.rx_buf.as_ptr() as usize) % 4 == 0;
@@ -709,7 +715,7 @@ impl<'a> SpiController<'a> {
          self.spi_data.decode_addr[cs].start,
         op.rx_buf.len(),
         (op.rx_buf.as_ptr() as u32),
-        op.addr);
+        op.address.value);
 
         // Length check
         if op.rx_buf.len() > self.spi_data.decode_addr[cs].len.try_into().unwrap() {
@@ -717,8 +723,8 @@ impl<'a> SpiController<'a> {
         }
 
         // Alignment check
-        if (op.addr % 4 != 0) || ((op.rx_buf.as_ptr() as u32) % 4 != 0) {
-            return Err(SpiError::AddressNotAligned(op.addr));
+        if (op.address.value % 4 != 0) || ((op.rx_buf.as_ptr() as u32) % 4 != 0) {
+            return Err(SpiError::AddressNotAligned(op.address.value));
         }
 
         dbg!(self, "set ctrl ");
@@ -743,7 +749,7 @@ impl<'a> SpiController<'a> {
             while self.regs.spi080().read().bits() & SPI_DMA_GRANT != SPI_DMA_GRANT {}
         }
 
-        let flash_start = self.spi_data.decode_addr[cs].start + op.addr - SPI_DMA_FLASH_MAP_BASE;
+        let flash_start = self.spi_data.decode_addr[cs].start + op.address.value - SPI_DMA_FLASH_MAP_BASE;
         dbg!(self, "flash start: 0x{:08x}", flash_start);
 
         // DMA flash and RAM address
@@ -782,8 +788,8 @@ impl<'a> SpiController<'a> {
         //dbg!(self, "##### write_dma ####");
 
         // Check alignment and bounds
-        if op.addr % 4 != 0 || (op.tx_buf.as_ptr() as usize) % 4 != 0 {
-            return Err(SpiError::AddressNotAligned(op.addr));
+        if op.address.value % 4 != 0 || (op.tx_buf.as_ptr() as usize) % 4 != 0 {
+            return Err(SpiError::AddressNotAligned(op.address.value));
         }
         if op.tx_buf.len() > self.spi_data.decode_addr[cs].len.try_into().unwrap() {
             return Err(SpiError::Other("Write length exceeds decode region"));
@@ -800,7 +806,7 @@ impl<'a> SpiController<'a> {
             self,
             "write opcode: {} , addr/offset: {}",
             op.opcode,
-            op.addr
+            op.address.value
         );
         cs_ctrlreg_w!(self, cs, ctrl_reg);
 
@@ -814,7 +820,7 @@ impl<'a> SpiController<'a> {
 
         // Program addresses
         self.regs.spi084().write(|w| unsafe {
-            w.bits(self.spi_data.decode_addr[cs].start + op.addr - SPI_DMA_FLASH_MAP_BASE)
+            w.bits(self.spi_data.decode_addr[cs].start + op.address.value - SPI_DMA_FLASH_MAP_BASE)
         });
         self.regs.spi088().write(|w| unsafe {
             w.bits(u32::try_from(op.tx_buf.as_ptr() as usize).unwrap() + SPI_DMA_RAM_MAP_BASE)
@@ -913,7 +919,7 @@ impl<'a> SpiBus<u8> for SpiController<'a> {
 
 impl<'a> SpiBusWithCs for SpiController<'a> {
     fn select_cs(&mut self, cs: usize) -> Result<(), SpiError> {
-        if cs > self.spi_config.max_cs {
+        if cs >= self.spi_config.max_cs {
             return Err(SpiError::CsSelectFailed(cs));
         }
         self.current_cs = cs;

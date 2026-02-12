@@ -9,7 +9,8 @@ use super::norflash::{
     Jesd216Mode, SpiNorCommand, SpiNorDevice, SPI_NOR_CMD_QREAD, SPI_NOR_CMD_READ_FAST_4B,
 };
 use super::{ norflash };
-use super::{CommandMode, CtrlType, SpiConfig, SpiData, SpiDecodeAddress, DataDirection};
+use super::{CommandMode, CtrlType, SpiConfig, SpiData, SpiDecodeAddress, DataDirection,
+    AddressWidth, FlashAddress};
 use crate::common::{self, DmaBuffer, DummyDelay};
 use crate::spi::norflashblockdevice;
 use crate::spi::norflashblockdevice::{BlockAddrUsize, NorFlashBlockDevice};
@@ -120,8 +121,7 @@ pub fn nor_device_read_data<'a>(len: usize) -> SpiNorCommand<'a> {
         mode: Jesd216Mode::Mode114,
         opcode: SPI_NOR_CMD_QREAD,
         dummy_cycle: 8,
-        addr: 0,
-        addr_len: 3,
+        address: FlashAddress { value: 0x0, width: AddressWidth::ThreeByte },      
         data_len: u32::try_from(len).unwrap(),
         tx_buf: &[],
         rx_buf: &mut [],
@@ -135,8 +135,7 @@ pub fn nor_device_write_data<'a>(len: usize) -> SpiNorCommand<'a> {
         mode: Jesd216Mode::Mode111,
         opcode: norflash::SPI_NOR_CMD_PP,
         dummy_cycle: 0,
-        addr: 0,
-        addr_len: 3,
+        address: FlashAddress { value: 0x0, width: AddressWidth::ThreeByte },
         data_len: u32::try_from(len).unwrap(),
         tx_buf: &[],
         rx_buf: &mut [],
@@ -150,8 +149,7 @@ pub fn nor_device_read_4b_data<'a>(len: usize) -> SpiNorCommand<'a> {
         mode: Jesd216Mode::Mode111Fast,
         opcode: SPI_NOR_CMD_READ_FAST_4B,
         dummy_cycle: 8,
-        addr: 0,
-        addr_len: 4,
+        address: FlashAddress { value: 0x0, width: AddressWidth::FourByte },
         data_len: u32::try_from(len).unwrap(),
         tx_buf: &[],
         rx_buf: &mut [],
@@ -165,8 +163,7 @@ pub fn nor_device_write_4b_data<'a>(len: usize) -> SpiNorCommand<'a> {
         mode: Jesd216Mode::Mode111,
         opcode: norflash::SPI_NOR_CMD_PP_4B,
         dummy_cycle: 0,
-        addr: 0,
-        addr_len: 4,
+         address: FlashAddress { value: 0x0, width: AddressWidth::FourByte },
         data_len: u32::try_from(len).unwrap(),
         tx_buf: &[],
         rx_buf: &mut [],
