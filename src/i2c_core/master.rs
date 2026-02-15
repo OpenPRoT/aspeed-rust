@@ -217,9 +217,9 @@ impl<'a> Ast1060I2c<'a> {
 
             // Set TX byte count in i2cc0c (len - 1)
             #[allow(clippy::cast_possible_truncation)]
-            self.regs().i2cc0c().modify(|_, w| unsafe {
-                w.tx_data_byte_count().bits((chunk_len - 1) as u8)
-            });
+            self.regs()
+                .i2cc0c()
+                .modify(|_, w| unsafe { w.tx_data_byte_count().bits((chunk_len - 1) as u8) });
 
             // Clear interrupts before command
             self.clear_interrupts(0xffff_ffff);
@@ -292,9 +292,9 @@ impl<'a> Ast1060I2c<'a> {
 
             // Set RX buffer size in i2cc0c (len - 1)
             #[allow(clippy::cast_possible_truncation)]
-            self.regs().i2cc0c().modify(|_, w| unsafe {
-                w.rx_pool_buffer_size().bits((chunk_len - 1) as u8)
-            });
+            self.regs()
+                .i2cc0c()
+                .modify(|_, w| unsafe { w.rx_pool_buffer_size().bits((chunk_len - 1) as u8) });
 
             // Clear interrupts before command
             self.clear_interrupts(0xffff_ffff);

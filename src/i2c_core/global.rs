@@ -95,7 +95,7 @@ pub fn init_i2c_global() {
         // APB clk: 50MHz
         // I2CG10[31:24] = 0x62: base clk4 for i2c auto recovery timeout counter
         // I2CG10[23:16] = 0x22: base clk3 for Standard-mode (100kHz) min tBuf 4.7us
-        // I2CG10[15:8]  = 0x08: base clk2 for Fast-mode (400kHz) min tBuf 1.3us  
+        // I2CG10[15:8]  = 0x08: base clk2 for Fast-mode (400kHz) min tBuf 1.3us
         // I2CG10[7:0]   = 0x03: base clk1 for Fast-mode Plus (1MHz) min tBuf 0.5us
         i2cg.i2cg10().write(|w| w.bits(0x6222_0803));
     }

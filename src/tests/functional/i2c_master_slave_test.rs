@@ -203,13 +203,19 @@ fn test_adt7490_register_reads(uart: &mut UartController<'_>, results: &mut Test
             // Read register value
             match i2c.read(ADT7490_ADDRESS, &mut buf) {
                 Ok(()) => {
-                    let _ = writeln!(uart, "  Read: 0x{:02X}, expected: 0x{expected:02X}\r", buf[0]);
+                    let _ = writeln!(
+                        uart,
+                        "  Read: 0x{:02X}, expected: 0x{expected:02X}\r",
+                        buf[0]
+                    );
                     if buf[0] == expected {
                         let _ = writeln!(uart, "  [PASS] Register 0x{reg_addr:02X} matches\r");
                         results.pass();
                     } else {
-                        let _ =
-                            writeln!(uart, "  [WARN] Value differs (may be OK for dynamic regs)\r");
+                        let _ = writeln!(
+                            uart,
+                            "  [WARN] Value differs (may be OK for dynamic regs)\r"
+                        );
                         results.pass(); // Still pass - some regs are dynamic
                     }
                 }
@@ -370,7 +376,10 @@ unsafe fn run_slave_tests_inner(uart: &mut UartController<'_>) {
         return;
     }
 
-    let _ = writeln!(uart, "[SLAVE] Configured at address 0x{SLAVE_ADDRESS:02X}\r");
+    let _ = writeln!(
+        uart,
+        "[SLAVE] Configured at address 0x{SLAVE_ADDRESS:02X}\r"
+    );
     let _ = writeln!(uart, "[SLAVE] Entering event loop...\n\r");
 
     slave_event_loop(uart, &mut slave);
@@ -396,15 +405,14 @@ fn slave_event_loop(uart: &mut UartController<'_>, slave: &mut Ast1060I2c<'_>) {
                     transaction_count += 1;
                 }
                 SlaveEvent::ReadRequest => {
-                    let _ = writeln!(uart, "[SLAVE] master read request: i2c on_transaction start\r");
+                    let _ = writeln!(
+                        uart,
+                        "[SLAVE] master read request: i2c on_transaction start\r"
+                    );
                 }
                 SlaveEvent::DataSent { len } => {
                     let _ = writeln!(uart, "[SLAVE] Sent {len} bytes\r");
-                    let _ = writeln!(
-                        uart,
-                        "sending {:02X?}\r",
-                        &TEST_PATTERN_READ[..len]
-                    );
+                    let _ = writeln!(uart, "sending {:02X?}\r", &TEST_PATTERN_READ[..len]);
                     let _ = slave.slave_write(&TEST_PATTERN_READ);
                     transaction_count += 1;
                 }
@@ -412,7 +420,10 @@ fn slave_event_loop(uart: &mut UartController<'_>, slave: &mut Ast1060I2c<'_>) {
                     let _ = writeln!(uart, "[SLAVE] Stop condition\r");
                 }
                 SlaveEvent::WriteRequest => {
-                    let _ = writeln!(uart, "[SLAVE] master write request: i2c on_transaction start\r");
+                    let _ = writeln!(
+                        uart,
+                        "[SLAVE] master write request: i2c on_transaction start\r"
+                    );
                 }
             }
         }
@@ -427,7 +438,10 @@ fn slave_event_loop(uart: &mut UartController<'_>, slave: &mut Ast1060I2c<'_>) {
 
         // Exit after some transactions
         if transaction_count >= 10 {
-            let _ = writeln!(uart, "\n[SLAVE] Completed {transaction_count} transactions\r");
+            let _ = writeln!(
+                uart,
+                "\n[SLAVE] Completed {transaction_count} transactions\r"
+            );
             break;
         }
     }

@@ -87,14 +87,14 @@ impl<'a> Ast1060I2c<'a> {
         #[allow(clippy::cast_possible_truncation)]
         if is_read {
             // Set RX buffer size (len - 1)
-            self.regs().i2cc0c().modify(|_, w| unsafe {
-                w.rx_pool_buffer_size().bits((len - 1) as u8)
-            });
+            self.regs()
+                .i2cc0c()
+                .modify(|_, w| unsafe { w.rx_pool_buffer_size().bits((len - 1) as u8) });
         } else {
             // Set TX byte count (len - 1)
-            self.regs().i2cc0c().modify(|_, w| unsafe {
-                w.tx_data_byte_count().bits((len - 1) as u8)
-            });
+            self.regs()
+                .i2cc0c()
+                .modify(|_, w| unsafe { w.tx_data_byte_count().bits((len - 1) as u8) });
         }
 
         // Build command: PKT_EN + address + START + TX/RX + BUFF_EN + STOP

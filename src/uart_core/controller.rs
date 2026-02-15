@@ -83,9 +83,10 @@ impl<'a> UartController<'a> {
         self.regs.uartlcr().modify(|_, w| w.dlab().set_bit());
 
         // Set divisor latch low byte
-        self.regs
-            .uartdll()
-            .write(|w| unsafe { w.the_lsbof_the_bd_divisor_latch().bits((divisor & 0xFF) as u8) });
+        self.regs.uartdll().write(|w| unsafe {
+            w.the_lsbof_the_bd_divisor_latch()
+                .bits((divisor & 0xFF) as u8)
+        });
 
         // Set divisor latch high byte
         self.regs.uartdlh().write(|w| unsafe {
@@ -332,9 +333,10 @@ impl<'a> UartController<'a> {
     /// * `level` - The new trigger level
     pub fn set_rx_trigger_level(&self, level: FifoTriggerLevel) {
         unsafe {
-            self.regs
-                .uartfcr()
-                .modify(|_, w| w.define_the_rxr_fifointtrigger_level().bits(level.as_bits()));
+            self.regs.uartfcr().modify(|_, w| {
+                w.define_the_rxr_fifointtrigger_level()
+                    .bits(level.as_bits())
+            });
         }
     }
 
