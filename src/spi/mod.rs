@@ -10,6 +10,7 @@ use embedded_hal::spi::ErrorType;
 use embedded_hal::spi::SpiBus;
 use embedded_io::Write;
 
+pub mod aspeed_norflash;
 pub mod device;
 pub mod fmccontroller;
 pub mod norflash;
