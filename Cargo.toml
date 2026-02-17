@@ -31,6 +31,7 @@ ast1060-pac = { git = "https://github.com/AspeedTech-BMC/ast1060-pac.git", featu
 embedded-hal = { version = "1.0.0" }
 embedded-hal-old = { git = "https://github.com/rust-embedded/embedded-hal.git", rev = "599d44fdc7e709cb9ae6580ec11c0b7f7f102", package = "embedded-hal" }
 embedded-io = "0.6.1"
+embedded-storage = "0.3.1"
 fugit = "0.3.7"
 proposed-traits = { git = "https://github.com/rusty1968/proposed_traits.git", package = "proposed-traits", rev = "85641310df5a5276c67f81621b104322cff0286c" }
 hex-literal = "0.4"

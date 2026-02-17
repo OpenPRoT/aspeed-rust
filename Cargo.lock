@@ -68,6 +68,7 @@ dependencies = [
  "embedded-hal 1.0.0",
  "embedded-hal 1.0.0-alpha.1",
  "embedded-io",
+ "embedded-storage",
  "fugit",
  "heapless",
  "hex-literal",
