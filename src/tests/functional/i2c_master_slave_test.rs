@@ -429,7 +429,7 @@ fn slave_event_loop(uart: &mut UartController<'_>, slave: &mut Ast1060I2c<'_>) {
         }
 
         poll_count += 1;
-        if poll_count % 100_000 == 0 {
+        if poll_count.is_multiple_of(100_000) {
             let _ = writeln!(
                 uart,
                 "[SLAVE] ... waiting (transactions: {transaction_count})\r"

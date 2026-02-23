@@ -1,6 +1,6 @@
 // Licensed under the Apache-2.0 license
 
-use crate::common::{DummyDelay, NoOpLogger, UartLogger};
+use crate::common::{NoOpLogger, UartLogger};
 use crate::i2c::ast1060_i2c::Ast1060I2c;
 use crate::i2c::common::{I2cConfigBuilder, I2cSpeed, I2cXferMode};
 use crate::i2c::i2c_controller::{HardwareInterface, I2cController};
@@ -91,7 +91,7 @@ impl RegisterAccess for DummyI2CTarget {
 
 #[allow(clippy::too_many_lines)]
 pub fn test_i2c_master(uart: &mut UartController<'_>) {
-    let peripherals = unsafe { Peripherals::steal() };
+    let _peripherals = unsafe { Peripherals::steal() };
     let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
     let mut dbg_uart = UartController::new(uart_regs);
 

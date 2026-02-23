@@ -4,7 +4,7 @@
 
 use super::{constants, controller::Ast1060I2c, error::I2cError};
 
-impl<'a> Ast1060I2c<'a> {
+impl Ast1060I2c<'_> {
     /// Recover the I2C bus from stuck condition
     pub fn recover_bus(&mut self) -> Result<(), I2cError> {
         // Disable master and slave functionality

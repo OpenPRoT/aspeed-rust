@@ -66,6 +66,7 @@ impl LineStatus {
     ///
     /// Returns true if framing, parity, overrun, or FIFO error is detected.
     #[inline]
+    #[must_use]
     pub fn has_error(&self) -> bool {
         self.intersects(
             Self::ERROR_IN_FIFO | Self::FRAMING_ERROR | Self::PARITY_ERROR | Self::OVERRUN_ERROR,
@@ -76,6 +77,7 @@ impl LineStatus {
     ///
     /// Returns true if the transmit holding register (or TX FIFO) has space.
     #[inline]
+    #[must_use]
     pub fn can_transmit(&self) -> bool {
         self.contains(Self::TX_HOLDING_EMPTY)
     }
@@ -84,6 +86,7 @@ impl LineStatus {
     ///
     /// Returns true if at least one byte is in the receive buffer.
     #[inline]
+    #[must_use]
     pub fn has_data(&self) -> bool {
         self.contains(Self::DATA_READY)
     }
@@ -92,30 +95,35 @@ impl LineStatus {
     ///
     /// Returns true if both shift register and holding register/FIFO are empty.
     #[inline]
+    #[must_use]
     pub fn is_tx_idle(&self) -> bool {
         self.contains(Self::TX_EMPTY)
     }
 
     /// Check if a break condition was detected
     #[inline]
+    #[must_use]
     pub fn is_break(&self) -> bool {
         self.contains(Self::BREAK)
     }
 
     /// Check for framing error specifically
     #[inline]
+    #[must_use]
     pub fn is_framing_error(&self) -> bool {
         self.contains(Self::FRAMING_ERROR)
     }
 
     /// Check for parity error specifically
     #[inline]
+    #[must_use]
     pub fn is_parity_error(&self) -> bool {
         self.contains(Self::PARITY_ERROR)
     }
 
     /// Check for overrun error specifically
     #[inline]
+    #[must_use]
     pub fn is_overrun_error(&self) -> bool {
         self.contains(Self::OVERRUN_ERROR)
     }

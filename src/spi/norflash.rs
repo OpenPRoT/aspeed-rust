@@ -147,7 +147,7 @@ macro_rules! start_transfer {
 }
 
 //TODO: add 4byte address mode support
-impl<'a, B, SPIPF> SpiNorDevice for ChipSelectDevice<'a, B, SPIPF>
+impl<B, SPIPF> SpiNorDevice for ChipSelectDevice<'_, B, SPIPF>
 where
     B: SpiBusWithCs,
     SPIPF: SpipfInstance,

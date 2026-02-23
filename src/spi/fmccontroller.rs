@@ -26,7 +26,7 @@ use embedded_hal::{
     spi::{ErrorType, SpiBus},
 };
 
-impl<'a> ErrorType for FmcController<'a> {
+impl ErrorType for FmcController<'_> {
     type Error = SpiError;
 }
 
@@ -647,7 +647,7 @@ impl<'a> FmcController<'a> {
         }
 
         // Alignment check
-        if (op.addr % 4 != 0) || ((op.rx_buf.as_ptr() as u32) % 4 != 0) {
+        if !op.addr.is_multiple_of(4) || !(op.rx_buf.as_ptr() as u32).is_multiple_of(4) {
             return Err(SpiError::AddressNotAligned(op.addr));
         }
         // Construct control value
@@ -705,7 +705,7 @@ impl<'a> FmcController<'a> {
         let cs = self.current_cs;
         dbg!(self, "##### write_dma ####");
         // Check alignment and bounds
-        if op.addr % 4 != 0 || (op.tx_buf.as_ptr() as usize) % 4 != 0 {
+        if !op.addr.is_multiple_of(4) || !(op.tx_buf.as_ptr() as usize).is_multiple_of(4) {
             return Err(SpiError::AddressNotAligned(op.addr));
         }
         if op.tx_buf.len() > self.spi_data.decode_addr[cs].len.try_into().unwrap() {
@@ -754,7 +754,7 @@ impl<'a> FmcController<'a> {
     }
 }
 
-impl<'a> SpiBus<u8> for FmcController<'a> {
+impl SpiBus<u8> for FmcController<'_> {
     // we only use mmap for all transaction
     fn read(&mut self, buffer: &mut [u8]) -> Result<(), SpiError> {
         let ahb_addr = self.spi_data.decode_addr[self.current_cs].start as usize as *const u32;
@@ -792,7 +792,7 @@ impl<'a> SpiBus<u8> for FmcController<'a> {
     }
 }
 
-impl<'a> SpiBusWithCs for FmcController<'a> {
+impl SpiBusWithCs for FmcController<'_> {
     fn select_cs(&mut self, cs: usize) -> Result<(), SpiError> {
         let user_reg = self.spi_data.cmd_mode[cs].user;
         if cs > self.spi_config.max_cs {

@@ -21,11 +21,13 @@ pub enum FifoTriggerLevel {
 
 impl FifoTriggerLevel {
     /// Get the register value for this trigger level
+    #[must_use]
     pub fn as_bits(&self) -> u8 {
         *self as u8
     }
 
     /// Get the number of bytes that will trigger an interrupt
+    #[must_use]
     pub fn trigger_count(&self) -> u8 {
         match self {
             FifoTriggerLevel::OneByte => 1,
@@ -62,11 +64,13 @@ impl Default for FifoConfig {
 
 impl FifoConfig {
     /// Create new FIFO configuration with defaults
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Disable FIFOs (byte-by-byte mode)
+    #[must_use]
     pub fn disabled() -> Self {
         Self {
             enabled: false,
@@ -75,6 +79,7 @@ impl FifoConfig {
     }
 
     /// Set trigger level
+    #[must_use]
     pub fn trigger_level(mut self, level: FifoTriggerLevel) -> Self {
         self.rx_trigger_level = level;
         self

@@ -14,51 +14,61 @@ pub struct ModemStatus(u8);
 
 impl ModemStatus {
     /// Create from register value
+    #[must_use]
     pub fn from_bits(value: u8) -> Self {
         Self(value)
     }
 
     /// Get raw register value
+    #[must_use]
     pub fn bits(&self) -> u8 {
         self.0
     }
 
     /// Data Carrier Detect (DCD)
+    #[must_use]
     pub fn dcd(&self) -> bool {
         self.0 & 0x80 != 0
     }
 
     /// Ring Indicator (RI)
+    #[must_use]
     pub fn ri(&self) -> bool {
         self.0 & 0x40 != 0
     }
 
     /// Data Set Ready (DSR)
+    #[must_use]
     pub fn dsr(&self) -> bool {
         self.0 & 0x20 != 0
     }
 
     /// Clear to Send (CTS)
+    #[must_use]
     pub fn cts(&self) -> bool {
         self.0 & 0x10 != 0
     }
 
     /// Delta DCD (changed since last read)
+    #[must_use]
     pub fn delta_dcd(&self) -> bool {
         self.0 & 0x08 != 0
     }
 
     /// Trailing Edge RI
+    #[must_use]
     pub fn trailing_ri(&self) -> bool {
         self.0 & 0x04 != 0
     }
 
     /// Delta DSR (changed since last read)
+    #[must_use]
     pub fn delta_dsr(&self) -> bool {
         self.0 & 0x02 != 0
     }
 
     /// Delta CTS (changed since last read)
+    #[must_use]
     pub fn delta_cts(&self) -> bool {
         self.0 & 0x01 != 0
     }
@@ -83,6 +93,7 @@ pub struct UartStats {
 
 impl UartStats {
     /// Create new empty statistics
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -93,6 +104,7 @@ impl UartStats {
     }
 
     /// Total error count
+    #[must_use]
     pub fn total_errors(&self) -> u32 {
         self.framing_errors + self.parity_errors + self.overrun_errors
     }

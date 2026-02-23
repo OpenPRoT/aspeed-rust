@@ -102,7 +102,7 @@ impl Error for I2cError {
 }
 
 /// Associates the `I2cError` type with `Ast1060I2c` for embedded-hal trait implementations.
-impl<'a> ErrorType for Ast1060I2c<'a> {
+impl ErrorType for Ast1060I2c<'_> {
     type Error = I2cError;
 }
 
@@ -147,7 +147,7 @@ impl<'a> ErrorType for Ast1060I2c<'a> {
 /// i2c.write_read(0x52, &[0xA0], &mut buffer)?;
 /// # Ok::<(), aspeed_ddk::i2c_core::error::I2cError>(())
 /// ```
-impl<'a> I2c<SevenBitAddress> for Ast1060I2c<'a> {
+impl I2c<SevenBitAddress> for Ast1060I2c<'_> {
     /// Writes data to an I2C slave device.
     ///
     /// # Arguments

@@ -1,6 +1,6 @@
 // Licensed under the Apache-2.0 license
 
-//! Trait implementations for embedded_io and core::fmt
+//! Trait implementations for `embedded_io` and `core::fmt`
 
 use embedded_io::{ErrorType, Read, Write};
 
@@ -19,7 +19,7 @@ impl Write for UartController<'_> {
     /// Write bytes to the UART
     ///
     /// This implementation:
-    /// - Blocks on the first byte if TX is full (per embedded_io spec)
+    /// - Blocks on the first byte if TX is full (per `embedded_io` spec)
     /// - Returns early if TX becomes full after writing at least one byte
     /// - Never returns Ok(0) unless the input buffer is empty
     fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
@@ -60,7 +60,7 @@ impl Read for UartController<'_> {
     /// Read bytes from the UART
     ///
     /// This implementation:
-    /// - Blocks until at least one byte is available (per embedded_io spec)
+    /// - Blocks until at least one byte is available (per `embedded_io` spec)
     /// - Returns available bytes up to buffer length
     /// - Checks for receive errors on each byte
     fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
@@ -120,7 +120,7 @@ impl core::fmt::Write for UartController<'_> {
 // ============================================================================
 
 impl UartController<'_> {
-    /// Non-blocking write using nb::Result
+    /// Non-blocking write using `nb::Result`
     ///
     /// Returns `nb::Error::WouldBlock` if TX is full.
     pub fn nb_write(&mut self, byte: u8) -> nb::Result<(), UartError> {
@@ -132,7 +132,7 @@ impl UartController<'_> {
         }
     }
 
-    /// Non-blocking read using nb::Result
+    /// Non-blocking read using `nb::Result`
     ///
     /// Returns `nb::Error::WouldBlock` if RX is empty.
     pub fn nb_read(&mut self) -> nb::Result<u8, UartError> {
@@ -143,7 +143,7 @@ impl UartController<'_> {
         }
     }
 
-    /// Non-blocking flush using nb::Result
+    /// Non-blocking flush using `nb::Result`
     ///
     /// Returns `nb::Error::WouldBlock` if TX is not idle.
     pub fn nb_flush(&mut self) -> nb::Result<(), UartError> {

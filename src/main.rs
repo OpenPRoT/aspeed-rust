@@ -23,7 +23,6 @@ use aspeed_ddk::tests::functional::hash_test::run_hash_tests;
 use aspeed_ddk::tests::functional::hmac_test::run_hmac_tests;
 use aspeed_ddk::tests::functional::i2c_core_test::run_i2c_core_tests;
 use aspeed_ddk::tests::functional::i2c_master_slave_test::run_master_slave_tests;
-use aspeed_ddk::tests::functional::i2c_master_slave_test::{run_master_tests, run_slave_tests};
 use aspeed_ddk::tests::functional::i2c_test;
 use aspeed_ddk::tests::functional::rsa_test::run_rsa_tests;
 use aspeed_ddk::tests::functional::timer_test::run_timer_tests;
@@ -312,8 +311,6 @@ fn test_owned_sha512(uart: &mut UartController<'_>, hace: ast1060_pac::Hace) {
 #[entry]
 fn main() -> ! {
     let peripherals = unsafe { Peripherals::steal() };
-    let uart = peripherals.uart;
-    let mut delay = DummyDelay;
 
     // For jlink attach
     // set aspeed_ddk::__cortex_m_rt_main::HALT.v.value = 0 in gdb

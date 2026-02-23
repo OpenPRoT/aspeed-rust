@@ -112,7 +112,7 @@ impl SlaveBuffer {
     }
 }
 
-impl<'a> Ast1060I2c<'a> {
+impl Ast1060I2c<'_> {
     /// Configure the controller for slave mode
     pub fn configure_slave(&mut self, config: &SlaveConfig) -> Result<(), I2cError> {
         // Ensure master mode is disabled first
@@ -269,6 +269,7 @@ impl<'a> Ast1060I2c<'a> {
             self.copy_to_buffer(&data[..to_write])?;
 
             // Set transfer length
+            #[allow(clippy::cast_possible_truncation)]
             self.regs()
                 .i2cc0c()
                 .write(|w| unsafe { w.tx_data_byte_count().bits(to_write as u8 - 1) });
@@ -296,6 +297,7 @@ impl<'a> Ast1060I2c<'a> {
     }
 
     /// Handle slave mode interrupt
+    #[allow(clippy::too_many_lines)]
     pub fn handle_slave_interrupt(&mut self) -> Option<SlaveEvent> {
         let status = self.regs().i2cs24().read().bits();
 
@@ -413,7 +415,7 @@ impl<'a> Ast1060I2c<'a> {
             }
         } else {
             //byte irq
-            let mut cmd: u32 = constants::AST_I2CS_ACTIVE_ALL;
+            let cmd: u32 = constants::AST_I2CS_ACTIVE_ALL;
 
             if status
                 == constants::AST_I2CS_SLAVE_MATCH
@@ -421,7 +423,7 @@ impl<'a> Ast1060I2c<'a> {
                     | constants::AST_I2CS_WAIT_RX_DMA
             {
                 // S: Sw|D
-                let byte_data = self.regs().i2cc08().read().rx_byte_buffer().bits();
+                let _byte_data = self.regs().i2cc08().read().rx_byte_buffer().bits();
                 self.regs().i2cs28().write(|w| unsafe { w.bits(cmd) });
                 self.regs().i2cs24().write(|w| unsafe { w.bits(status) });
                 self.regs().i2cs24().read().bits();
@@ -439,7 +441,7 @@ impl<'a> Ast1060I2c<'a> {
                         | constants::AST_I2CS_STOP
             {
                 // S: Sw|D|P
-                let byte_data = self.regs().i2cc08().read().rx_byte_buffer().bits();
+                let _byte_data = self.regs().i2cc08().read().rx_byte_buffer().bits();
                 self.regs().i2cs28().write(|w| unsafe { w.bits(cmd) });
                 self.regs().i2cs24().write(|w| unsafe { w.bits(status) });
                 return Some(SlaveEvent::WriteRequest);
@@ -453,7 +455,7 @@ impl<'a> Ast1060I2c<'a> {
             {
                 // S: Sr|D
                 // received one byte
-                let byte_data = self.regs().i2cc08().read().rx_byte_buffer().bits();
+                let _byte_data = self.regs().i2cc08().read().rx_byte_buffer().bits();
                 return Some(SlaveEvent::DataSent { len: 1 });
             } else if status == constants::AST_I2CS_TX_ACK | constants::AST_I2CS_WAIT_TX_DMA {
                 // S: tD
@@ -474,9 +476,8 @@ impl<'a> Ast1060I2c<'a> {
                 self.regs().i2cs28().write(|w| unsafe { w.bits(cmd) });
                 self.regs().i2cs24().write(|w| unsafe { w.bits(status) });
                 return Some(SlaveEvent::Stop);
-            } else {
-                // TODO byte slave sts
             }
+            // TODO byte slave sts
         }
         None
     }

@@ -9,7 +9,7 @@
 use super::{constants, controller::Ast1060I2c, error::I2cError, types::I2cXferMode};
 
 #[allow(dead_code)]
-impl<'a> Ast1060I2c<'a> {
+impl Ast1060I2c<'_> {
     /// Start a transfer (common setup for byte/buffer modes)
     ///
     /// Note: Currently unused - byte/buffer mode functions in master.rs

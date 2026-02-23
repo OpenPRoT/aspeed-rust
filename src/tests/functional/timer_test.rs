@@ -13,6 +13,7 @@ static mut UART_PTR: Option<&'static mut UartController<'static>> = None;
 static mut TIMER_INSTANCE: Option<TimerController<Timer>> = None;
 
 #[no_mangle]
+#[allow(static_mut_refs)]
 pub extern "C" fn timer() {
     unsafe {
         if let Some(uart) = UART_PTR.as_mut() {
@@ -40,6 +41,7 @@ pub fn test_timer_isr(uart: &mut UartController<'_>) {
     }
 }
 
+#[allow(static_mut_refs)]
 fn timer_callback() {
     unsafe {
         if let Some(uart) = UART_PTR.as_mut() {

@@ -9,7 +9,7 @@
 //! # Features
 //!
 //! - 16550-compatible UART interface
-//! - Configurable baud rates (9600 to 1.5 MBaud)
+//! - Configurable baud rates (9600 to 1.5 `MBaud`)
 //! - 8N1, 7E1, and other line configurations
 //! - 16-byte TX/RX FIFO with configurable trigger levels
 //! - Interrupt support with multiple sources
@@ -22,10 +22,10 @@
 //!
 //! - `controller`: Core hardware abstraction and initialization
 //! - `config`: Configuration types (baud rate, word length, parity, stop bits)
-//! - `error`: Error types and embedded_io::Error implementation
+//! - `error`: Error types and `embedded_io::Error` implementation
 //! - `fifo`: FIFO management and trigger level configuration
 //! - `interrupt`: Interrupt handling and status types
-//! - `line_status`: LineStatus bitflags and helpers
+//! - `line_status`: `LineStatus` bitflags and helpers
 //! - `types`: Common type definitions
 //!
 //! # Usage Example

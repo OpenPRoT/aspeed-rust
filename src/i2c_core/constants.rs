@@ -24,8 +24,8 @@
 //!
 //! - **i2cm18**: Command register - write all command bits here
 //! - **i2cm14**: Status register - read status, write to clear interrupts
-//! - **i2cc08**: Byte data register for byte mode (tx_byte_buffer, rx_byte_buffer)
-//! - **i2cc0c**: Buffer size register for buffer mode (tx_data_byte_count, rx_pool_buffer_size)
+//! - **i2cc08**: Byte data register for byte mode (`tx_byte_buffer`, `rx_byte_buffer`)
+//! - **i2cc0c**: Buffer size register for buffer mode (`tx_data_byte_count`, `rx_pool_buffer_size`)
 
 /// HPLL frequency (1 `GHz`)
 pub const HPLL_FREQ: u32 = 1_000_000_000;
@@ -46,7 +46,7 @@ pub const I2C_FAST_PLUS_MODE_HZ: u32 = 1_000_000;
 pub const BUFFER_MODE_SIZE: usize = 32;
 
 /// I2C buffer size register value
-/// Reference: ast1060_i2c.rs:97
+/// Reference: `ast1060_i2c.rs:97`
 pub const I2C_BUF_SIZE: u8 = 0x20;
 
 /// Default timeout in microseconds

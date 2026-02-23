@@ -317,7 +317,7 @@ pub fn test_fmc(uart: &mut UartController<'_>) {
     let current_cs = 0x0;
     let fmc_data = SpiData::new();
 
-    let peripherals = unsafe { Peripherals::steal() };
+    let _peripherals = unsafe { Peripherals::steal() };
     let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
     let mut fmc_uart_controller = UartController::new(uart_regs);
     fmc_uart_controller.init(&UartConfig::default()).unwrap();
@@ -396,7 +396,7 @@ pub fn test_spi(uart: &mut UartController<'_>) {
     //astdebug::print_reg_u32(uart, SCU_BASE + 0x00, 0x100);
 
     let spi_data = SpiData::new();
-    let peripherals = unsafe { Peripherals::steal() };
+    let _peripherals = unsafe { Peripherals::steal() };
     let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
     let mut spi_uart_controller = UartController::new(uart_regs);
     spi_uart_controller.init(&UartConfig::default()).unwrap();
@@ -515,7 +515,7 @@ pub fn test_spi(uart: &mut UartController<'_>) {
 }
 
 pub fn test_block_device<T: SpiNorDevice>(blockdev: &mut NorFlashBlockDevice<T>) {
-    let peripherals = unsafe { Peripherals::steal() };
+    let _peripherals = unsafe { Peripherals::steal() };
     let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
     let mut uartc = UartController::new(uart_regs);
     let addr = 0x0;
@@ -614,7 +614,7 @@ pub fn test_spi2(uart: &mut UartController<'_>) {
     test_log!(uart, "SPI1 set pinctrl");
     test_log!(uart, " SCU:: 0x{:08x}", SCU_BASE);
 
-    let peripherals = unsafe { Peripherals::steal() };
+    let _peripherals = unsafe { Peripherals::steal() };
     let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
 
     let mut uart_controller = UartController::new(uart_regs);

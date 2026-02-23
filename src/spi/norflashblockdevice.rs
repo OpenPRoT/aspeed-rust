@@ -154,7 +154,7 @@ where
         }
 
         // Ensure data is aligned to full program_size chunks
-        if data.len() % program_block != 0 {
+        if !data.len().is_multiple_of(program_block) {
             return Err(BlockError::ProgramError); // Or define a new `MisalignedWrite` variant
         }
 

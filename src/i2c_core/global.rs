@@ -47,7 +47,7 @@ use ast1060_pac;
 /// # Reference
 ///
 /// See original implementation in:
-/// - `aspeed-rust/src/i2c/ast1060_i2c.rs:320-360` - Global init with I2CGLOBAL_INIT guard
+/// - `aspeed-rust/src/i2c/ast1060_i2c.rs:320-360` - Global init with `I2CGLOBAL_INIT` guard
 /// - `aspeed-rust/src/i2c/ast1060_i2c.rs:347-360` - Clock divider configuration comments
 ///
 /// # Safety

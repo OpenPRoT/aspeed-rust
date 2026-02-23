@@ -9,7 +9,7 @@ use proposed_traits::mac::{MacAlgorithm, MacInit, MacOp};
 
 fn print_hex_array(uart: &mut UartController, data: &[u8], bytes_per_line: usize) {
     for (i, b) in data.iter().enumerate() {
-        if i % bytes_per_line == 0 {
+        if i.is_multiple_of(bytes_per_line) {
             writeln!(uart, "\r").unwrap();
         } else {
             write!(uart, " ").unwrap();

@@ -97,7 +97,7 @@ impl<'a> UartLogger<'a> {
     }
 }
 
-impl<'a> Logger for UartLogger<'a> {
+impl Logger for UartLogger<'_> {
     fn debug(&mut self, msg: &str) {
         writeln!(self.uart, "{msg}").ok();
         write!(self.uart, "\r").ok();

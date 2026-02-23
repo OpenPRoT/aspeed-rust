@@ -14,22 +14,22 @@
 //!
 //! - **i2cm18** (Master Command Register): All command bits written here
 //!   - Command: `PKT_EN | pkt_addr(addr) | START_CMD | TX/RX_CMD | BUFF_EN | STOP_CMD`
-//!   - Reference: ast1060_i2c.rs:1024 and ast1060_i2c.rs:1107
+//!   - Reference: `ast1060_i2c.rs:1024` and `ast1060_i2c.rs:1107`
 //!
 //! - **i2cc08** (Byte Buffer Register): TX/RX byte data for byte mode
-//!   - `tx_byte_buffer()`: Write byte to transmit (ast1060_i2c.rs:1101)
-//!   - `rx_byte_buffer()`: Read received byte (ast1060_i2c.rs:790)
+//!   - `tx_byte_buffer()`: Write byte to transmit (`ast1060_i2c.rs:1101`)
+//!   - `rx_byte_buffer()`: Read received byte (`ast1060_i2c.rs:790`)
 //!
 //! - **i2cc0c** (Buffer Size Register): Buffer sizes for buffer mode
-//!   - `tx_data_byte_count()`: Set TX count (ast1060_i2c.rs:1089)
-//!   - `rx_pool_buffer_size()`: Set RX size (ast1060_i2c.rs:1011)
+//!   - `tx_data_byte_count()`: Set TX count (`ast1060_i2c.rs:1089`)
+//!   - `rx_pool_buffer_size()`: Set RX size (`ast1060_i2c.rs:1011`)
 //!
 //! - **i2cm14** (Interrupt Status Register): Read status, write-to-clear
-//!   - Reference: ast1060_i2c.rs:849-870 (aspeed_i2c_master_irq)
+//!   - Reference: `ast1060_i2c.rs:849-870` (`aspeed_i2c_master_irq`)
 
 use super::{constants, controller::Ast1060I2c, error::I2cError, types::I2cXferMode};
 
-impl<'a> Ast1060I2c<'a> {
+impl Ast1060I2c<'_> {
     /// Write bytes to an I2C device
     pub fn write(&mut self, addr: u8, bytes: &[u8]) -> Result<(), I2cError> {
         if bytes.is_empty() {
@@ -193,7 +193,7 @@ impl<'a> Ast1060I2c<'a> {
     /// Uses hardware buffer for efficient multi-byte transfers.
     /// Single transaction model: START+addr on first chunk only,
     /// subsequent chunks continue the transaction without re-addressing.
-    /// Reference: ast1060_i2c.rs do_i2cm_tx() continuation logic
+    /// Reference: `ast1060_i2c.rs` `do_i2cm_tx()` continuation logic
     fn write_buffer_mode(&mut self, addr: u8, bytes: &[u8]) -> Result<(), I2cError> {
         let total_len = bytes.len();
         let mut offset = 0;
@@ -272,7 +272,7 @@ impl<'a> Ast1060I2c<'a> {
     /// Uses hardware buffer for efficient multi-byte transfers.
     /// Single transaction model: START+addr on first chunk only,
     /// subsequent chunks continue the transaction without re-addressing.
-    /// Reference: ast1060_i2c.rs do_i2cm_rx() lines 762-810
+    /// Reference: `ast1060_i2c.rs` `do_i2cm_rx()` lines 762-810
     fn read_buffer_mode(&mut self, addr: u8, buffer: &mut [u8]) -> Result<(), I2cError> {
         let total_len = buffer.len();
         let mut offset = 0;

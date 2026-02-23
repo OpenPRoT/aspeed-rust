@@ -211,6 +211,8 @@ impl<'a> UartController<'a> {
     ///
     /// Note: Reading LSR clears some error flags.
     #[inline]
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
     pub fn line_status(&self) -> LineStatus {
         LineStatus::from_bits_truncate(self.regs.uartlsr().read().bits() as u8)
     }
@@ -219,12 +221,15 @@ impl<'a> UartController<'a> {
     ///
     /// Returns the highest priority pending interrupt source.
     #[inline]
+    #[must_use]
     pub fn interrupt_source(&self) -> InterruptSource {
         InterruptSource::from_iir(self.regs.uartiir().read().intdecoding_table().bits())
     }
 
     /// Read modem status register
     #[inline]
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
     pub fn modem_status(&self) -> ModemStatus {
         ModemStatus::from_bits(self.regs.uartmsr().read().bits() as u8)
     }
@@ -233,6 +238,7 @@ impl<'a> UartController<'a> {
     ///
     /// Returns true if the transmit holding register cannot accept more data.
     #[inline]
+    #[must_use]
     pub fn is_tx_full(&self) -> bool {
         !self.regs.uartlsr().read().thre().bit()
     }
@@ -241,6 +247,7 @@ impl<'a> UartController<'a> {
     ///
     /// Returns true if no data is available to read.
     #[inline]
+    #[must_use]
     pub fn is_rx_empty(&self) -> bool {
         !self.regs.uartlsr().read().dr().bit()
     }
@@ -249,6 +256,7 @@ impl<'a> UartController<'a> {
     ///
     /// Returns true when both shift register and FIFO/THR are empty.
     #[inline]
+    #[must_use]
     pub fn is_tx_idle(&self) -> bool {
         self.regs.uartlsr().read().txter_empty().bit_is_set()
     }
@@ -269,7 +277,7 @@ impl<'a> UartController<'a> {
         }
         self.regs
             .uartthr()
-            .write(|w| unsafe { w.bits(byte as u32) });
+            .write(|w| unsafe { w.bits(u32::from(byte)) });
         Ok(())
     }
 
@@ -281,7 +289,7 @@ impl<'a> UartController<'a> {
         while self.is_tx_full() {}
         self.regs
             .uartthr()
-            .write(|w| unsafe { w.bits(byte as u32) });
+            .write(|w| unsafe { w.bits(u32::from(byte)) });
     }
 
     /// Read a single byte (non-blocking)
@@ -311,6 +319,7 @@ impl<'a> UartController<'a> {
             return Err(UartError::Break);
         }
 
+        #[allow(clippy::cast_possible_truncation)]
         Ok(self.regs.uartrbr().read().bits() as u8)
     }
 
