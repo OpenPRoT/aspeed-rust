@@ -30,7 +30,7 @@ jobs:
           sudo apt-get install -qy build-essential curl gcc-multilib gcc-riscv64-unknown-elf git
           
       - name: Install cargo-bloat
-        run: cargo install cargo-bloat
+        run: cargo install cargo-bloat --locked
 
       - name: Build current branch
         run: |
