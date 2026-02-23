@@ -1,7 +1,7 @@
 # Licensed under the Apache-2.0 license
 
 [toolchain]
-channel = "nightly-2024-09-17"
+channel = "nightly-2025-07-20"
 components = ["rust-src", "rustfmt", "clippy"]
 targets = ["thumbv7em-none-eabihf"]
 profile = "minimal"
