@@ -1,7 +1,7 @@
 // Licensed under the Apache-2.0 license
 
 use crate::ecdsa::{PublicKey, Scalar48, Secp384r1Curve, Signature};
-use crate::uart::UartController;
+use crate::uart_core::UartController;
 use embedded_io::Write;
 use proposed_traits::digest::DigestAlgorithm;
 use proposed_traits::ecdsa::{Curve, EcdsaVerify};

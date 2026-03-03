@@ -3,6 +3,7 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
+mod bloat;
 mod build;
 mod clippy;
 mod docs;
@@ -92,6 +93,25 @@ enum Commands {
         #[arg(long)]
         suite: Option<String>,
     },
+
+    /// Analyze binary size with cargo bloat
+    Bloat {
+        /// Build for release
+        #[arg(long)]
+        release: bool,
+
+        /// Target architecture
+        #[arg(long, default_value = "thumbv7em-none-eabihf")]
+        target: String,
+
+        /// Generate detailed report
+        #[arg(long)]
+        report: bool,
+
+        /// Output directory for reports
+        #[arg(long, default_value = "target/bloat-reports")]
+        output_dir: String,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -114,6 +134,18 @@ fn main() -> anyhow::Result<()> {
         Commands::HardwareTest { uart, suite } => {
             test::hardware_test(uart.as_deref(), suite.as_deref())
         }
+        Commands::Bloat {
+            release,
+            target,
+            report,
+            output_dir,
+        } => {
+            if report {
+                bloat::generate_report(release, &target, &output_dir)
+            } else {
+                bloat::analyze_bloat(release, &target, bloat::BloatFormat::Table)
+            }
+        }
     }
 }
 
@@ -131,6 +163,16 @@ fn precommit() -> anyhow::Result<()> {
 
     // Run tests
     test::test(false, false)?;
+
+    // Generate size analysis report (optional - skip if cargo-bloat not available)
+    println!("Generating binary size report...");
+    match bloat::generate_report(true, "thumbv7em-none-eabihf", "target/bloat-reports") {
+        Ok(_) => println!("📊 Size analysis report generated"),
+        Err(e) => {
+            println!("⚠️  Size analysis skipped: {}", e);
+            println!("   Install cargo-bloat with: cargo install cargo-bloat");
+        }
+    }
 
     println!("✅ All pre-commit checks passed!");
     Ok(())

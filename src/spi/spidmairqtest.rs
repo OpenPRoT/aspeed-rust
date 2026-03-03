@@ -10,7 +10,7 @@ use crate::spi::spicontroller::SpiController;
 use crate::spi::spitest::{self, DeviceId, FMC_CONFIG};
 use crate::spi::SpiData;
 use crate::spimonitor::SpiMonitorNum;
-use crate::uart::UartController;
+use crate::uart_core::UartController;
 use crate::{astdebug, pinctrl};
 use core::ptr;
 use cortex_m::peripheral::NVIC;

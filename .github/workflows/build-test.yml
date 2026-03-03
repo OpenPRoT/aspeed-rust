@@ -28,6 +28,9 @@ jobs:
         run: |
           sudo apt-get update -qy
           sudo apt-get install -qy build-essential curl gcc-multilib gcc-riscv64-unknown-elf git
+          
+      - name: Install cargo-bloat
+        run: cargo install cargo-bloat --locked
 
       - name: Verify Cargo.lock is up to date
         run: |
@@ -41,3 +44,11 @@ jobs:
       - name: Run precommit checks (build/format/lint)
         run: |
           cargo --config "$EXTRA_CARGO_CONFIG" xtask precommit
+
+      - name: Upload binary size reports
+        uses: actions/upload-artifact@v4
+        if: always() && hashFiles('target/bloat-reports/*') != ''
+        with:
+          name: bloat-reports
+          path: target/bloat-reports/
+          retention-days: 30

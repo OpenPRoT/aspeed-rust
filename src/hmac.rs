@@ -125,14 +125,14 @@ impl IntoHashAlgo for Sha512 {
     }
 }
 
-impl<'ctrl, A> MacInit<A> for HaceController<'ctrl>
+impl<A> MacInit<A> for HaceController
 where
     A: MacAlgorithm + IntoHashAlgo,
     A::MacOutput: Default + AsMut<[u8]>,
     A::Key: AsRef<[u8]>,
 {
     type OpContext<'a>
-        = OpContextImpl<'a, 'ctrl, A>
+        = OpContextImpl<'a, A>
     where
         Self: 'a; // Define your OpContext type here
 
@@ -171,8 +171,8 @@ where
     }
 }
 
-pub struct OpContextImpl<'a, 'ctrl, A: MacAlgorithm + IntoHashAlgo> {
-    pub controller: &'a mut HaceController<'ctrl>,
+pub struct OpContextImpl<'a, A: MacAlgorithm + IntoHashAlgo> {
+    pub controller: &'a mut HaceController,
     _phantom: core::marker::PhantomData<A>,
 }
 
@@ -191,14 +191,14 @@ impl From<ErrorKind> for MacError {
     }
 }
 
-impl<A> ErrorType for OpContextImpl<'_, '_, A>
+impl<A> ErrorType for OpContextImpl<'_, A>
 where
     A: MacAlgorithm + IntoHashAlgo,
 {
     type Error = MacError;
 }
 
-impl<A> MacOp for OpContextImpl<'_, '_, A>
+impl<A> MacOp for OpContextImpl<'_, A>
 where
     A: MacAlgorithm + IntoHashAlgo,
     A::MacOutput: Default + AsMut<[u8]>,

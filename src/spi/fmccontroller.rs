@@ -22,7 +22,7 @@ use super::consts::{SPI_DMA_TRIGGER_LEN};
 
 use crate::dbg;
 
-use crate::{common::DummyDelay, spi::norflash::SpiNorCommand, uart::UartController};
+use crate::{common::DummyDelay, spi::norflash::SpiNorCommand, uart_core::UartController};
 use embedded_hal::{
     delay::DelayNs,
     spi::{ErrorType, SpiBus},

@@ -119,13 +119,13 @@ impl IntoHashAlgo for Sha512 {
     }
 }
 
-impl<'ctrl, A> DigestInit<A> for HaceController<'ctrl>
+impl<A> DigestInit<A> for HaceController
 where
     A: DigestAlgorithm + IntoHashAlgo,
     A::DigestOutput: Default + AsMut<[u8]>,
 {
     type OpContext<'a>
-        = OpContextImpl<'a, 'ctrl, A>
+        = OpContextImpl<'a, A>
     where
         Self: 'a; // Define your OpContext type here
 
@@ -144,8 +144,8 @@ where
     }
 }
 
-pub struct OpContextImpl<'a, 'ctrl, A: DigestAlgorithm + IntoHashAlgo> {
-    pub controller: &'a mut HaceController<'ctrl>,
+pub struct OpContextImpl<'a, A: DigestAlgorithm + IntoHashAlgo> {
+    pub controller: &'a mut HaceController,
     _phantom: core::marker::PhantomData<A>,
 }
 
@@ -164,14 +164,14 @@ impl From<ErrorKind> for HashError {
     }
 }
 
-impl<A> ErrorType for OpContextImpl<'_, '_, A>
+impl<A> ErrorType for OpContextImpl<'_, A>
 where
     A: DigestAlgorithm + IntoHashAlgo,
 {
     type Error = HashError;
 }
 
-impl<A> DigestOp for OpContextImpl<'_, '_, A>
+impl<A> DigestOp for OpContextImpl<'_, A>
 where
     A: DigestAlgorithm + IntoHashAlgo,
     A::DigestOutput: Default + AsMut<[u8]>,

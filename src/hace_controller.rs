@@ -1,7 +1,9 @@
 // Licensed under the Apache-2.0 license
 
 use ast1060_pac::Hace;
-use core::convert::Infallible;
+use core::convert::{AsRef, Infallible};
+use core::default::Default;
+use core::marker::Sync;
 use proposed_traits::digest::ErrorType as DigestErrorType;
 use proposed_traits::mac::ErrorType as MacErrorType;
 
@@ -132,7 +134,7 @@ pub trait ContextCleanup {
     fn cleanup_context(&mut self);
 }
 
-impl ContextCleanup for crate::hace_controller::HaceController<'_> {
+impl ContextCleanup for crate::hace_controller::HaceController {
     fn cleanup_context(&mut self) {
         let ctx = self.ctx_mut();
         ctx.bufcnt = 0;
@@ -315,19 +317,17 @@ impl HashAlgo {
     }
 }
 
-pub struct HaceController<'ctrl> {
-    pub hace: &'ctrl Hace,
+pub struct HaceController {
+    pub hace: Hace,
     pub algo: HashAlgo,
-    pub aspeed_hash_ctx: AspeedHashContext, // Own the context instead of using a pointer
 }
 
-impl<'ctrl> HaceController<'ctrl> {
+impl HaceController {
     #[must_use]
-    pub fn new(hace: &'ctrl Hace) -> Self {
+    pub fn new(hace: Hace) -> Self {
         Self {
             hace,
             algo: HashAlgo::SHA256,
-            aspeed_hash_ctx: AspeedHashContext::new(), // Create a new context instance
         }
     }
 
@@ -338,15 +338,15 @@ impl<'ctrl> HaceController<'ctrl> {
     }
 }
 
-impl DigestErrorType for HaceController<'_> {
+impl DigestErrorType for HaceController {
     type Error = Infallible;
 }
 
-impl MacErrorType for HaceController<'_> {
+impl MacErrorType for HaceController {
     type Error = Infallible;
 }
 
-impl HaceController<'_> {
+impl HaceController {
     pub fn ctx_mut(&mut self) -> &mut AspeedHashContext {
         unsafe { &mut *Self::shared_ctx() }
     }
@@ -391,8 +391,15 @@ impl HaceController<'_> {
         let key_len = key_bytes.len();
         let digest_len = self.algo.digest_size();
 
+        // SAFETY: key_len is bounded by the key buffer size (128 bytes) which fits in u32
+        debug_assert!(u32::try_from(key_len).is_ok(), "key_len exceeds u32::MAX");
+
         self.ctx_mut().digcnt[0] = key_len as u64;
-        self.ctx_mut().bufcnt = u32::try_from(key_len).expect("key_len too large to fit in u32");
+        self.ctx_mut().bufcnt = u32::try_from(key_len).unwrap_or_else(|_| {
+            // This should never happen given buffer constraints, but provide safe fallback
+            debug_assert!(false, "key_len conversion to u32 failed");
+            u32::MAX
+        });
         self.ctx_mut().buffer[..key_len].copy_from_slice(key_bytes);
         self.ctx_mut().method &= !HACE_SG_EN; // Disable SG mode for key hashing
         self.copy_iv_to_digest();
@@ -406,8 +413,18 @@ impl HaceController<'_> {
         self.ctx_mut().key[..digest_len].copy_from_slice(slice);
         self.ctx_mut().ipad[..digest_len].copy_from_slice(slice);
         self.ctx_mut().opad[..digest_len].copy_from_slice(slice);
-        self.ctx_mut().key_len =
-            u32::try_from(digest_len).expect("digest_len too large to fit in u32");
+
+        // SAFETY: digest_len is bounded by the digest buffer size (64 bytes) which fits in u32
+        debug_assert!(
+            u32::try_from(digest_len).is_ok(),
+            "digest_len exceeds u32::MAX"
+        );
+
+        self.ctx_mut().key_len = u32::try_from(digest_len).unwrap_or_else(|_| {
+            // This should never happen given buffer constraints, but provide safe fallback
+            debug_assert!(false, "digest_len conversion to u32 failed");
+            u32::MAX
+        });
     }
 
     pub fn fill_padding(&mut self, remaining: usize) {
@@ -434,7 +451,17 @@ impl HaceController<'_> {
         if block_size == 64 {
             let bits = (ctx.digcnt[0] << 3).to_be_bytes();
             ctx.buffer[bufcnt + padlen..bufcnt + padlen + 8].copy_from_slice(&bits);
-            ctx.bufcnt += u32::try_from(padlen + 8).expect("padlen + 8 too large to fit in u32");
+
+            // SAFETY: padlen is bounded by block_size (64) + 8, which easily fits in u32
+            debug_assert!(
+                u32::try_from(padlen + 8).is_ok(),
+                "padlen + 8 exceeds u32::MAX"
+            );
+
+            ctx.bufcnt += u32::try_from(padlen + 8).unwrap_or_else(|_| {
+                debug_assert!(false, "padlen + 8 conversion to u32 failed");
+                u32::MAX
+            });
         } else {
             let low = (ctx.digcnt[0] << 3).to_be_bytes();
             let high = ((ctx.digcnt[1] << 3) | (ctx.digcnt[0] >> 61)).to_be_bytes();
@@ -442,7 +469,16 @@ impl HaceController<'_> {
             ctx.buffer[bufcnt + padlen..bufcnt + padlen + 8].copy_from_slice(&high);
             ctx.buffer[bufcnt + padlen + 8..bufcnt + padlen + 16].copy_from_slice(&low);
 
-            ctx.bufcnt += u32::try_from(padlen + 16).expect("padlen + 16 too large to fit in u32");
+            // SAFETY: padlen is bounded by block_size (128) + 16, which easily fits in u32
+            debug_assert!(
+                u32::try_from(padlen + 16).is_ok(),
+                "padlen + 16 exceeds u32::MAX"
+            );
+
+            ctx.bufcnt += u32::try_from(padlen + 16).unwrap_or_else(|_| {
+                debug_assert!(false, "padlen + 16 conversion to u32 failed");
+                u32::MAX
+            });
         }
     }
 }

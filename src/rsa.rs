@@ -353,8 +353,8 @@ impl<D: DelayNs> RsaSign for AspeedRsa<'_, D> {
     ) -> Result<Self::Signature, Self::Error> {
         let mut output = [0u8; 512];
 
-        let m_len = ((private_key.m_bits + 7) / 8) as usize;
-        let d_len = ((private_key.d_bits + 7) / 8) as usize;
+        let m_len = private_key.m_bits.div_ceil(8) as usize;
+        let d_len = private_key.d_bits.div_ceil(8) as usize;
         let input_len = message.len;
 
         let input = &message.data[..input_len];
@@ -425,8 +425,8 @@ impl<D: DelayNs> RsaVerify for AspeedRsa<'_, D> {
         let mut output = [0u8; 512];
 
         let input_len = signature.len;
-        let e_len = ((public_key.e_bits + 7) / 8) as usize;
-        let m_len = ((public_key.m_bits + 7) / 8) as usize;
+        let e_len = public_key.e_bits.div_ceil(8) as usize;
+        let m_len = public_key.m_bits.div_ceil(8) as usize;
 
         let input = &signature.data[..input_len];
         let m = &public_key.m[..m_len];

@@ -4,7 +4,7 @@ use ast1060_pac::{Spipf, Spipf1, Spipf2, Spipf3};
 
 use crate::astdebug;
 use crate::spimonitor::{RegionInfo, SpiMonitor, SpiMonitorInit, SpimExtMuxSel};
-use crate::uart::UartController;
+use crate::uart_core::UartController;
 use embedded_io::Write;
 
 pub const SPIM1_BASE: usize = 0x7e79_1000;
