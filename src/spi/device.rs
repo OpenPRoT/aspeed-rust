@@ -16,7 +16,7 @@ where
     pub spim: Option<SpiMonitorNum>,
 }
 
-impl<'a, B> ErrorType for ChipSelectDevice<'a, B>
+impl<B> ErrorType for ChipSelectDevice<'_, B>
 where
     B: SpiBusWithCs,
 {
@@ -30,7 +30,7 @@ impl From<SpiMonitorNum> for u32 {
     }
 }
 
-impl<'a, B> SpiDevice for ChipSelectDevice<'a, B>
+impl<B> SpiDevice for ChipSelectDevice<'_, B>
 where
     B: SpiBusWithCs,
 {
@@ -50,8 +50,8 @@ where
                 Operation::Write(buf) => self.bus.write(buf)?,
                 Operation::Transfer(read, write) => self.bus.transfer(read, write)?,
                 Operation::TransferInPlace(buf) => self.bus.transfer_in_place(buf)?,
-                Operation::DelayNs(_) => todo!(),
-            };
+                Operation::DelayNs(_) => {}, // Ignore delay, as the SPI controller will handle timing
+            }
         }
         if let Some(_spim) = self.spim {
             super::spim_proprietary_post_config();

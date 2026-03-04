@@ -373,8 +373,8 @@ fn main() -> ! {
     test_wdt(&mut uart_controller);
     run_timer_tests(&mut uart_controller);
 
-    let test_spicontroller = false;
-    let test_irq = false;
+    let test_spicontroller = true;
+    let test_irq = true;
     if test_spicontroller {
         if test_irq {
             writeln!(uart_controller, "\r\nTEST SPI IRQ!!\r\n").unwrap();

@@ -4,7 +4,7 @@ use super::{
     aspeed_get_spi_freq_div, get_addr_buswidth, get_hclock_rate, get_mid_point_of_longest_one,
     spi_cal_dummy_cycle, spi_calibration_enable, spi_io_mode, spi_io_mode_user, spi_read_data,
     spi_write_data, CtrlType, SpiBusWithCs, SpiConfig, SpiData, SpiError, get_cmd_buswidth,
-    get_data_buswidth, DataDirection, AddressWidth, FlashAddress
+    get_data_buswidth, DataDirection, AddressWidth,
 };
 use super::consts::{ASPEED_MAX_CS,ASPEED_SPI_NORMAL_READ, ASPEED_SPI_NORMAL_WRITE, ASPEED_SPI_SZ_256M, 
     ASPEED_SPI_SZ_2M, ASPEED_SPI_USER, ASPEED_SPI_USER_INACTIVE, SPI_CALIB_LEN, 
@@ -28,7 +28,7 @@ use embedded_hal::{
     spi::{ErrorType, SpiBus},
 };
 
-impl<'a> ErrorType for FmcController<'a> {
+impl ErrorType for FmcController<'_> {
     type Error = SpiError;
 }
 
@@ -684,7 +684,7 @@ impl<'a> FmcController<'a> {
         }
 
         // Alignment check
-        if (op.address.value % 4 != 0) || ((op.rx_buf.as_ptr() as u32) % 4 != 0) {
+        if !op.address.value.is_multiple_of(4) || !(op.rx_buf.as_ptr() as u32).is_multiple_of(4) {
             return Err(SpiError::AddressNotAligned(op.address.value));
         }
         // Construct control value
@@ -753,7 +753,7 @@ impl<'a> FmcController<'a> {
         op.address.value);
         //self.dbg_fmc_dma();
         // Check alignment and bounds
-        if op.address.value % 4 != 0 || (op.tx_buf.as_ptr() as usize) % 4 != 0 {
+        if !op.address.value.is_multiple_of(4) || !(op.tx_buf.as_ptr() as usize).is_multiple_of(4) {
             return Err(SpiError::AddressNotAligned(op.address.value));
         }
         if op.tx_buf.len() > self.spi_data.decode_addr[cs].len.try_into().unwrap() {
@@ -828,7 +828,7 @@ impl<'a> FmcController<'a> {
     }
 }
 
-impl<'a> SpiBus<u8> for FmcController<'a> {
+impl SpiBus<u8> for FmcController<'_> {
     // we only use mmap for all transaction
     fn read(&mut self, buffer: &mut [u8]) -> Result<(), SpiError> {
         let ahb_addr = self.spi_data.decode_addr[self.current_cs].start as usize as *const u32;
@@ -872,7 +872,7 @@ impl<'a> SpiBus<u8> for FmcController<'a> {
     }
 }
 
-impl<'a> SpiBusWithCs for FmcController<'a> {
+impl SpiBusWithCs for FmcController<'_> {
     fn select_cs(&mut self, cs: usize) -> Result<(), SpiError> {
         if cs >= self.spi_config.max_cs {
             return Err(SpiError::CsSelectFailed(cs));

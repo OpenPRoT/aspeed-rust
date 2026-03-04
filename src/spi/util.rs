@@ -65,13 +65,15 @@ pub fn spi_cal_dummy_cycle(bus_width: u32, dummy_cycle: u32) -> u32 {
     let dummy_byte = dummy_cycle / bits_per_cycle;
     ((dummy_byte & 0x3) << 6) | (((dummy_byte & 0x4) >> 2) << 14)
 }
-
+#[must_use]
 pub const fn get_cmd_buswidth(v: u32) -> u8 {
     ((v & 0x0000_0F00) >> 8) as u8
 }
+#[must_use]
 pub const fn get_addr_buswidth(v: u32) -> u8 {
     ((v & 0x0000_00F0) >> 4) as u8
 }
+#[must_use]
 pub const fn get_data_buswidth(v: u32) -> u8 {
     (v & 0x0000_000F) as u8
 }
@@ -85,7 +87,6 @@ pub const fn get_data_buswidth(v: u32) -> u8 {
 /// # Returns
 /// A 32-bit value encoding the frequency divider,
 /// or 0 if no valid divider found.
-
 #[must_use]
 pub fn aspeed_get_spi_freq_div(bus_clk: u32, max_freq: u32) -> u32 {
     // Division mapping array matching C div_arr
