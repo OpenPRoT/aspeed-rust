@@ -12,9 +12,10 @@ use ast1060_pac::{Wdt, Wdt1};
 
 use aspeed_ddk::ecdsa::AspeedEcdsa;
 use aspeed_ddk::hace_controller::HaceController;
+use aspeed_ddk::i2c_core;
 use aspeed_ddk::rsa::AspeedRsa;
+use aspeed_ddk::spi;
 use aspeed_ddk::syscon::{ClockId, ResetId, SysCon};
-use aspeed_ddk::{i2c_core, spi};
 use fugit::MillisDurationU32 as MilliSeconds;
 
 use aspeed_ddk::tests::functional::ecdsa_test::run_ecdsa_tests;
@@ -24,6 +25,8 @@ use aspeed_ddk::tests::functional::hmac_test::run_hmac_tests;
 use aspeed_ddk::tests::functional::i2c_core_test::run_i2c_core_tests;
 use aspeed_ddk::tests::functional::i2c_master_slave_test::run_master_slave_tests;
 use aspeed_ddk::tests::functional::i2c_test;
+#[cfg(any(feature = "i3c_master", feature = "i3c_target"))]
+use aspeed_ddk::tests::functional::i3c_test;
 use aspeed_ddk::tests::functional::rsa_test::run_rsa_tests;
 use aspeed_ddk::tests::functional::timer_test::run_timer_tests;
 use panic_halt as _;
@@ -58,7 +61,7 @@ unsafe fn pre_init() {
     write_volatile(cache_area_offset as *mut u32, cache_val);
 
     let cache_inval_offset: u32 = 0x7e6e_2a54;
-    let cache_inval_val = 0x8660_0000;
+    let cache_inval_val = 0x81e0_0000;
     write_volatile(cache_inval_offset as *mut u32, cache_inval_val);
 
     // Enable Cache
@@ -334,10 +337,10 @@ fn main() -> ! {
     let reset_id = ResetId::RstHACE;
     let _ = syscon.reset_deassert(&reset_id);
 
+    #[allow(unused_mut, unused_variables)]
     let mut hace_controller = HaceController::new(hace);
 
     run_hash_tests(&mut uart_controller, &mut hace_controller);
-
     run_hmac_tests(&mut uart_controller, &mut hace_controller);
 
     // Test the owned digest API
@@ -346,15 +349,21 @@ fn main() -> ! {
     // Enable RSA and ECC
     let _ = syscon.enable_clock(ClockId::ClkRSACLK as u8);
 
+    #[allow(unused_mut, unused_variables)]
     let mut ecdsa = AspeedEcdsa::new(&secure, delay.clone());
     run_ecdsa_tests(&mut uart_controller, &mut ecdsa);
 
+    #[allow(unused_mut, unused_variables)]
     let mut rsa = AspeedRsa::new(&secure, delay);
     run_rsa_tests(&mut uart_controller, &mut rsa);
     gpio_test::test_gpioa(&mut uart_controller);
     i2c_test::test_i2c_master(&mut uart_controller);
     #[cfg(feature = "i2c_target")]
     i2c_test::test_i2c_slave(&mut uart_controller);
+    #[cfg(feature = "i3c_master")]
+    i3c_test::test_i3c_master(&mut uart_controller);
+    #[cfg(feature = "i3c_target")]
+    i3c_test::test_i3c_target(&mut uart_controller);
 
     // Run i2c_core functional tests
     run_i2c_core_tests(&mut uart_controller);
