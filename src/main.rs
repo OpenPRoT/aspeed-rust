@@ -5,7 +5,7 @@
 
 use core::sync::atomic::AtomicBool;
 // use core::arch::asm;
-use aspeed_ddk::uart::{Config, UartController};
+use aspeed_ddk::uart_core::{UartConfig, UartController};
 use aspeed_ddk::watchdog::WdtController;
 use ast1060_pac::Peripherals;
 use ast1060_pac::{Wdt, Wdt1};
@@ -14,14 +14,16 @@ use aspeed_ddk::ecdsa::AspeedEcdsa;
 use aspeed_ddk::hace_controller::HaceController;
 use aspeed_ddk::rsa::AspeedRsa;
 use aspeed_ddk::spi;
-
 use aspeed_ddk::syscon::{ClockId, ResetId, SysCon};
+use aspeed_ddk::{i2c_core, spi};
 use fugit::MillisDurationU32 as MilliSeconds;
 
 use aspeed_ddk::tests::functional::ecdsa_test::run_ecdsa_tests;
 use aspeed_ddk::tests::functional::gpio_test;
 use aspeed_ddk::tests::functional::hash_test::run_hash_tests;
 use aspeed_ddk::tests::functional::hmac_test::run_hmac_tests;
+use aspeed_ddk::tests::functional::i2c_core_test::run_i2c_core_tests;
+use aspeed_ddk::tests::functional::i2c_master_slave_test::run_master_slave_tests;
 use aspeed_ddk::tests::functional::i2c_test;
 #[cfg(any(feature = "i3c_master", feature = "i3c_target"))]
 use aspeed_ddk::tests::functional::i3c_test;
@@ -312,22 +314,14 @@ fn test_owned_sha512(uart: &mut UartController<'_>, hace: ast1060_pac::Hace) {
 #[entry]
 fn main() -> ! {
     let peripherals = unsafe { Peripherals::steal() };
-    let uart = peripherals.uart;
-    let mut delay = DummyDelay;
 
     // For jlink attach
     // set aspeed_ddk::__cortex_m_rt_main::HALT.v.value = 0 in gdb
     // debug_halt!();
-    let mut uart_controller = UartController::new(uart, &mut delay);
-    unsafe {
-        uart_controller.init(&Config {
-            baud_rate: 115_200,
-            word_length: aspeed_ddk::uart::WordLength::Eight as u8,
-            parity: aspeed_ddk::uart::Parity::None,
-            stop_bits: aspeed_ddk::uart::StopBits::One,
-            clock: 24_000_000,
-        });
-    }
+    // Get UART register block and create controller
+    let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
+    let mut uart_controller = UartController::new(uart_regs);
+    uart_controller.init(&UartConfig::default()).unwrap();
 
     let hace = peripherals.hace;
     let scu = peripherals.scu;
@@ -370,6 +364,19 @@ fn main() -> ! {
     i3c_test::test_i3c_master(&mut uart_controller);
     #[cfg(feature = "i3c_target")]
     i3c_test::test_i3c_target(&mut uart_controller);
+
+    // Run i2c_core functional tests
+    run_i2c_core_tests(&mut uart_controller);
+    {
+        //I2C core test on real hardware
+        i2c_core::init_i2c_global();
+        //run_master_tests(&mut uart_controller);
+        #[cfg(feature = "i2c_target")]
+        run_slave_tests(&mut uart_controller);
+    }
+
+    // Run I2C master-slave hardware integration tests
+    run_master_slave_tests(&mut uart_controller);
 
     test_wdt(&mut uart_controller);
     run_timer_tests(&mut uart_controller);

@@ -20,13 +20,13 @@ use crate::spi::{
     SPI_CTRL_CEX_SPI_CMD_MASK, SPI_CTRL_CEX_SPI_CMD_SHIFT, SPI_DMA_CLK_FREQ_MASK,
     SPI_DMA_CLK_FREQ_SHIFT, SPI_DMA_DELAY_MASK, SPI_DMA_DELAY_SHIFT,
 };
-use crate::{common::DummyDelay, spi::norflash::SpiNorData, uart::UartController};
+use crate::{common::DummyDelay, spi::norflash::SpiNorData, uart_core::UartController};
 
 use embedded_hal::{
     delay::DelayNs,
     spi::{ErrorType, SpiBus},
 };
-impl<'a> ErrorType for SpiController<'a> {
+impl ErrorType for SpiController<'_> {
     type Error = SpiError;
 }
 
@@ -687,7 +687,7 @@ impl<'a> SpiController<'a> {
         }
 
         // Alignment check
-        if (op.addr % 4 != 0) || ((op.rx_buf.as_ptr() as u32) % 4 != 0) {
+        if !op.addr.is_multiple_of(4) || !(op.rx_buf.as_ptr() as u32).is_multiple_of(4) {
             return Err(SpiError::AddressNotAligned(op.addr));
         }
 
@@ -752,7 +752,7 @@ impl<'a> SpiController<'a> {
         dbg!(self, "##### write_dma ####");
 
         // Check alignment and bounds
-        if op.addr % 4 != 0 || (op.tx_buf.as_ptr() as usize) % 4 != 0 {
+        if !op.addr.is_multiple_of(4) || !(op.tx_buf.as_ptr() as usize).is_multiple_of(4) {
             return Err(SpiError::AddressNotAligned(op.addr));
         }
         if op.tx_buf.len() > self.spi_data.decode_addr[cs].len.try_into().unwrap() {
@@ -807,7 +807,7 @@ impl<'a> SpiController<'a> {
     }
 }
 
-impl<'a> SpiBus<u8> for SpiController<'a> {
+impl SpiBus<u8> for SpiController<'_> {
     // we only use mmap for all transaction
     fn read(&mut self, buffer: &mut [u8]) -> Result<(), SpiError> {
         let ahb_addr = self.spi_data.decode_addr[self.current_cs].start as usize as *const u32;
@@ -850,7 +850,7 @@ impl<'a> SpiBus<u8> for SpiController<'a> {
     }
 }
 
-impl<'a> SpiBusWithCs for SpiController<'a> {
+impl SpiBusWithCs for SpiController<'_> {
     fn select_cs(&mut self, cs: usize) -> Result<(), SpiError> {
         let user_reg = self.spi_data.cmd_mode[cs].user;
         if cs > self.spi_config.max_cs {

@@ -829,7 +829,6 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
                         return Err(SpiMonitorError::AllowCmdSlotInvalid(u32::from(cmd)));
                     }
                     offset = index + 1;
-                    continue;
                 }
                 // No more command not found in command registers
                 Err(_) => break,
@@ -925,13 +924,12 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
         let mut adjusted_len = len;
         let mut aligned_addr = addr;
         //start address alignment, protect more
-        if (addr % ACCESS_BLOCK_UNIT) != 0 {
+        if !addr.is_multiple_of(ACCESS_BLOCK_UNIT) {
             adjusted_len += addr % ACCESS_BLOCK_UNIT;
             aligned_addr = (addr / ACCESS_BLOCK_UNIT) * ACCESS_BLOCK_UNIT;
         }
         //make len 16KB aligment
-        adjusted_len =
-            ((adjusted_len + ACCESS_BLOCK_UNIT - 1) / ACCESS_BLOCK_UNIT) * ACCESS_BLOCK_UNIT;
+        adjusted_len = adjusted_len.div_ceil(ACCESS_BLOCK_UNIT) * ACCESS_BLOCK_UNIT;
         (aligned_addr, adjusted_len)
     }
     //Each bit defines permission of one 16KB block

@@ -254,7 +254,6 @@ const fn get_data_buswidth(v: u32) -> u8 {
 /// # Returns
 /// A 32-bit value encoding the frequency divider,
 /// or 0 if no valid divider found.
-
 #[must_use]
 pub fn aspeed_get_spi_freq_div(bus_clk: u32, max_freq: u32) -> u32 {
     // Division mapping array matching C div_arr

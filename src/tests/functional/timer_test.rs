@@ -1,7 +1,7 @@
 // Licensed under the Apache-2.0 license
 
 use crate::timer::{TimerController, TimerType};
-use crate::uart::UartController;
+use crate::uart_core::UartController;
 use ast1060_pac::Timer;
 use cortex_m::peripheral::NVIC;
 use embedded_hal_old::timer::CountDown;
@@ -14,6 +14,7 @@ static mut TIMER_INSTANCE: Option<TimerController<Timer>> = None;
 
 #[cfg(feature = "isr-handlers")]
 #[no_mangle]
+#[allow(static_mut_refs)]
 pub extern "C" fn timer() {
     unsafe {
         if let Some(uart) = UART_PTR.as_mut() {
@@ -41,6 +42,7 @@ pub fn test_timer_isr(uart: &mut UartController<'_>) {
     }
 }
 
+#[allow(static_mut_refs)]
 fn timer_callback() {
     unsafe {
         if let Some(uart) = UART_PTR.as_mut() {

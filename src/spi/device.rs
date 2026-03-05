@@ -16,7 +16,7 @@ where
     pub spi_monitor: Option<&'a mut SpiMonitor<SPIPF>>,
 }
 
-impl<'a, B, SPIPF> ErrorType for ChipSelectDevice<'a, B, SPIPF>
+impl<B, SPIPF> ErrorType for ChipSelectDevice<'_, B, SPIPF>
 where
     B: SpiBusWithCs,
     SPIPF: SpipfInstance,
@@ -24,7 +24,7 @@ where
     type Error = B::Error;
 }
 
-impl<'a, B, SPIPF> SpiDevice for ChipSelectDevice<'a, B, SPIPF>
+impl<B, SPIPF> SpiDevice for ChipSelectDevice<'_, B, SPIPF>
 where
     B: SpiBusWithCs,
     SPIPF: SpipfInstance,
@@ -46,7 +46,7 @@ where
                 Operation::Transfer(read, write) => self.bus.transfer(read, write)?,
                 Operation::TransferInPlace(buf) => self.bus.transfer_in_place(buf)?,
                 Operation::DelayNs(_) => todo!(),
-            };
+            }
         }
 
         super::spim_proprietary_post_config();

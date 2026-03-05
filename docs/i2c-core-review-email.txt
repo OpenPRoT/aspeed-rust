@@ -1,0 +1,13 @@
+Subject: AST1060 I2C Core Refactor - Ready for Review and Testing
+
+Hi Aspeed Team,
+
+The i2c_core refactor establishes a single source of truth for AST1060 I2C driver functionality in the aspeed-rust repository. Instead of maintaining duplicate I2C implementations across bare-metal and Hubris environments, all hardware logic now lives in the portable i2c_core module. The Hubris driver becomes a thin wrapper that implements the I2cHardware trait by delegating to i2c_core. Key improvements include the from_initialized() constructor which eliminates redundant hardware re-initialization on every I2C operation (approximately 50x faster than the previous approach), and proper documentation of the interrupt architecture where master mode uses polling and slave mode uses real hardware interrupts via Hubris notifications.
+
+For a complete understanding of the three-layer architecture and implementation patterns, please review the design document at:
+
+https://github.com/OpenPRoT/aspeed-rust/blob/i2c-core/docs/i2c-core-hubris-integration-design.md
+
+This covers the division of responsibilities between app main.rs (clock gates, pin mux), i2c_core (controller init, transfers), and the Hubris wrapper (peripheral ownership, error mapping). Phase 2 is now complete with the container app building successfully. We would appreciate your review of the code and validation on AST1060 hardware before we proceed to Phase 3 integration with the openprot-i2c-server.
+
+Best regards

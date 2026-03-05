@@ -1789,7 +1789,7 @@ impl<'a, I2C: Instance, I2CT: I2CTarget, L: Logger> Ast1060I2c<'a, I2C, I2CT, L>
                 match &mut prev_op {
                     Operation::Read(rb) => self.read(addr, rb)?,
                     Operation::Write(wb) => self.write(addr, wb)?,
-                };
+                }
                 prev_op = op;
             }
         }
