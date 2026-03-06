@@ -8,16 +8,16 @@ use crate::spi::device::ChipSelectDevice;
 use crate::spi::norflash::{SpiNorCommand, SpiNorDevice};
 use crate::spi::spicontroller::SpiController;
 use crate::spi::spitest::{self, DeviceId, FMC_CONFIG};
-use crate::spi::{SpiData, SpiError};
+use crate::spi::SpiData;
 use crate::spimonitor::SpiMonitorNum;
 use crate::uart_core::{UartController, UartConfig};
 use crate::{astdebug, pinctrl};
 use core::ptr;
-use core::result::Result;
 use cortex_m::peripheral::NVIC;
 use embedded_hal::delay::DelayNs;
 use embedded_io::Write;
 use heapless::Deque;
+use core::result::Result;
 
 static mut FMC_CONTROLLER: Option<FmcController<'static>> = None;
 static mut SPI_CONTROLLER: Option<SpiController<'static>> = None;
@@ -70,34 +70,28 @@ static mut CURRENT_DMA: Option<DmaRequest> = None;
 static mut DMA_QUEUE: Deque<DmaRequest, MAX_DMA_CHAIN> = Deque::new();
 static mut CURRENT_DEVID: DeviceId = DeviceId::FmcCs0Idx;
 
-static mut FMC_IRQ_RESULT: Option<Result<(), SpiError>> = None;
-static mut FMC_IRQ_EVENT: bool = false;
-
-static mut SPI_IRQ_RESULT: Option<Result<(), SpiError>> = None;
-static mut SPI_IRQ_EVENT: bool = false;
-
 #[no_mangle]
 pub extern "C" fn fmc() {
     unsafe {
         let fmc = FMC_CONTROLLER.as_mut().unwrap();
-        let result = fmc.handle_interrupt();
+       
+        let dev = match CURRENT_DEVID {
+            DeviceId::FmcCs0Idx => FMC_DEV0_PTR.as_mut().unwrap(),
+            DeviceId::FmcCs1Idx => FMC_DEV1_PTR.as_mut().unwrap(),
+            _ => return,
+        };
+		let irq_result = fmc.handle_interrupt();
 
-        FMC_IRQ_RESULT = Some(result);
-        FMC_IRQ_EVENT = true;
-
-        // Continue minimal DMA handling logic
-        if let Some(req) = CURRENT_DMA.take() {
-            if matches!(req.op, DmaOp::Program | DmaOp::ProgramFast) {
-                let dev = match CURRENT_DEVID {
-                    DeviceId::FmcCs0Idx => &mut *FMC_DEV0_PTR,
-                    DeviceId::FmcCs1Idx => &mut *FMC_DEV1_PTR,
-                    _ => return,
-                };
-                dev.nor_wait_until_ready();
+        if let Ok(_) = irq_result {
+            if let Some(req) = CURRENT_DMA.take() {            
+                if matches!(req.op, DmaOp::Program | DmaOp::ProgramFast) {               
+                    dev.nor_wait_until_ready();
+                }
+                (req.on_complete)(req.verify, req.buf_idx, req.dst_buf);
             }
-            (req.on_complete)(req.verify, req.buf_idx, req.dst_buf);
+            start_next_dma();
         }
-         let _ = start_next_dma();
+           
     }
 }
 
@@ -105,15 +99,14 @@ pub extern "C" fn fmc() {
 pub extern "C" fn spi() {
     unsafe {
         let spi = SPI_CONTROLLER.as_mut().unwrap();
-        let result = spi.handle_interrupt();
+		let irq_result = spi.handle_interrupt();
 
-        SPI_IRQ_RESULT = Some(result);
-        SPI_IRQ_EVENT = true;
-
-        if let Some(req) = CURRENT_DMA.take() {               
-            (req.on_complete)(req.verify, req.buf_idx, req.dst_buf);
-        } 
-        let _ = start_next_dma();        
+        if let Ok(_) = irq_result {
+            if let Some(req) = CURRENT_DMA.take() {                
+                (req.on_complete)(req.verify, req.buf_idx, req.dst_buf);
+            } 
+            start_next_dma();
+         }
     }
 }
 
@@ -124,69 +117,59 @@ macro_rules! log_uart {
         write!($uart, "\r").ok();
     }};
 }
-#[allow(dead_code)]
+
 unsafe fn show_mmap_reg(uart: &mut UartController<'_>) {
     let (_reg_base, mmap_addr, _cs_capacity) = spitest::device_info(CURRENT_DEVID);
     log_uart!(uart, "[{:08x}]", mmap_addr);
     astdebug::print_reg_u8(uart, mmap_addr, 0x400);
 }
-
-#[allow(clippy::result_unit_err)]
-#[allow(clippy::missing_safety_doc)]
-pub unsafe fn start_next_dma() -> Result<(), ()> {
+unsafe fn start_next_dma() {
     if DMA_QUEUE.is_empty() {
-        REQUST_ALLDONE = true;
-        return Ok(());
+        REQUST_ALLDONE = true;        
+        return;
     }
 
-    let Some(req) = DMA_QUEUE.pop_front() else {
-        // queue said not empty but pop failed (shouldn't happen)
-        return Err(());
-    };
-
-    CURRENT_DMA = Some(req);
-
-    match CURRENT_DEVID {
-        DeviceId::FmcCs0Idx | DeviceId::FmcCs1Idx => {
-            start_dma_fmc_transfer(CURRENT_DMA.as_mut().unwrap())?;
-        }
-
-        DeviceId::Spi0Cs0Idx
-        | DeviceId::Spi1Cs0Idx
-        | DeviceId::Spi1Cs1Idx
-        | DeviceId::Spi0Cs1Idx => {
-            start_dma_spi_transfer(CURRENT_DMA.as_mut().unwrap())?;
+    if let Some(req) = DMA_QUEUE.pop_front() {
+        CURRENT_DMA = Some(req);
+        match CURRENT_DEVID {
+            DeviceId::FmcCs0Idx | DeviceId::FmcCs1Idx => {
+                let _= start_dma_fmc_transfer(CURRENT_DMA.as_mut().unwrap());
+            }
+            DeviceId::Spi0Cs0Idx
+            | DeviceId::Spi1Cs0Idx
+            | DeviceId::Spi1Cs1Idx
+            | DeviceId::Spi0Cs1Idx => {
+                let _= start_dma_spi_transfer(CURRENT_DMA.as_mut().unwrap());
+            }
         }
     }
-
-    Ok(())
 }
 
-pub fn on_complete_dma(verify: bool, idx: usize, _buf: &[u8]) {
-    let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
+pub fn on_complete_dma( verify: bool, idx: usize, _buf: &[u8]) {
+	let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
     let mut uart_controller = UartController::new(uart_regs);
     uart_controller.init(&UartConfig::default()).unwrap();
-    
     if verify {
         if verify_dma_buffer_match(&mut uart_controller, idx) {
-            log_uart!(&mut uart_controller, "DMA test passed!!");
-        } else {            
-            log_uart!(&mut uart_controller, "DMA test failed!!");            
+			log_uart!(&mut uart_controller, "DMA test passed!!");
+        } else {
+            log_uart!(&mut uart_controller, "DMA test failed!!");
         }
-    } //else if  {
-      //      astdebug::print_array_u8(&mut uart_controller, buf);
-      //}
+    }  
+	astdebug::print_array_u8(&mut uart_controller, _buf);
 }
 
 // Start DMA transfer using the device
-fn start_dma_spi_transfer( req: &mut DmaRequest) -> Result<(), ()> {
-    unsafe {      
-        let dev = match CURRENT_DEVID {
-            DeviceId::Spi0Cs0Idx => SPI_DEV0_PTR.as_mut().unwrap(),
-            _ => return Err(()),
-        };
+fn start_dma_spi_transfer(req: &mut DmaRequest) -> Result<(), ()> {
+    unsafe {
 
-        let  result = match req.op {
+        let dev = match CURRENT_DEVID { 
+            DeviceId::Spi0Cs0Idx => SPI_DEV0_PTR.as_mut().unwrap(),
+             _ => return Ok(()),
+        };
+            
+
+        let result = match req.op {
             DmaOp::Read => dev.nor_read_data(u32::try_from(req.src_addr).unwrap(), req.dst_buf),
             DmaOp::ReadFast => {
                 dev.nor_read_fast_4b_data(u32::try_from(req.src_addr).unwrap(), req.dst_buf)
@@ -199,19 +182,20 @@ fn start_dma_spi_transfer( req: &mut DmaRequest) -> Result<(), ()> {
             }
         };
         result.map_err(|_| ())
+       
     }
 }
 
 // Start DMA transfer using the device
-fn start_dma_fmc_transfer( req: &mut DmaRequest) -> Result<(), ()> {
+fn start_dma_fmc_transfer(req: &mut DmaRequest) -> Result<(), ()> {
     unsafe {
         let dev = match CURRENT_DEVID {
             DeviceId::FmcCs0Idx => FMC_DEV0_PTR.as_mut().unwrap(),
             DeviceId::FmcCs1Idx => FMC_DEV1_PTR.as_mut().unwrap(),
-            _ => return Err(()),
+            _ => return Ok(()),
         };
 
-        let result  = match req.op {
+        let result = match req.op {
             DmaOp::Read => dev.nor_read_data(u32::try_from(req.src_addr).unwrap(), req.dst_buf),
             DmaOp::ReadFast => {
                 dev.nor_read_fast_4b_data(u32::try_from(req.src_addr).unwrap(), req.dst_buf)
@@ -237,7 +221,7 @@ pub fn verify_dma_buffer_match(uart: &mut UartController<'_>, i: usize) -> bool 
             // Fast path failed. now scan for first mismatch for debug
             for (j, (&r, &w)) in read.iter().zip(write.iter()).enumerate() {
                 if r != w {
-                    log_uart!(uart, 
+                    log_uart!(uart,
                         "Mismatch at buffer {}, index {}: read={:02x}, expected={:02x}",
                         i,
                         j,
@@ -246,7 +230,7 @@ pub fn verify_dma_buffer_match(uart: &mut UartController<'_>, i: usize) -> bool 
                     );
                     break;
                 }
-            }           
+            }
             astdebug::print_array_u8(uart, read);
             astdebug::print_array_u8(uart, write);
             
@@ -307,8 +291,7 @@ pub unsafe fn dma_irq_chain_test(uart: &mut UartController<'_>, start_addrs: &[u
         log_uart!(uart, "chaining {}", i);
         
     } //for
-    let _ = start_next_dma();
-    
+    start_next_dma();
 }
 
 pub fn test_fmc_dma_irq(uart: &mut UartController<'_>) {
@@ -317,10 +300,11 @@ pub fn test_fmc_dma_irq(uart: &mut UartController<'_>) {
 
     pinctrl::Pinctrl::apply_pinctrl_group(pinctrl::PINCTRL_FMC_QUAD);
     let fmc_data = SpiData::new();
-    
+
     unsafe {
         // register interrupt
-        /* irq init */      
+        /* irq init */
+     
         NVIC::unmask(ast1060_pac::Interrupt::fmc);
 
         FMC_CONTROLLER = Some(FmcController::new(
@@ -390,9 +374,7 @@ pub fn test_fmc_dma_irq(uart: &mut UartController<'_>) {
             fill_dma_buffer(DmaOp::Program, true, 0x3e4d);
             let _ = dev1.nor_sector_erase(0x0000_0000);
             delay.delay_ns(8_000_000);
-            // NOTE: DMA write has an issue in AST2600-Errata-11
-            // DMA write ends before finish transfering data
-            // work-around: add delay
+
             dma_irq_chain_test(uart, &start_addrs, DmaOp::Program, false);
             delay.delay_ns(8_000_000);
             if !REQUST_ALLDONE {
@@ -422,6 +404,7 @@ pub fn test_spi_dma_irq(uart: &mut UartController<'_>) {
     unsafe {
         // register interrupt
         // irq init
+ 
         NVIC::unmask(ast1060_pac::Interrupt::spi);
 
         SPI_CONTROLLER = Some(SpiController::new(
@@ -463,7 +446,7 @@ pub fn test_spi_dma_irq(uart: &mut UartController<'_>) {
             fill_dma_buffer(DmaOp::ReadFast, false, 0);
             dma_irq_chain_test(uart,&start_addrs, DmaOp::ReadFast, false);
         } else {
-            fill_dma_buffer(DmaOp::Program, true, 0xd3e1);
+            fill_dma_buffer(DmaOp::Program, true, 0x1e3f);
             let _ = dev0.nor_sector_erase(0x0000_0000);
             delay.delay_ns(8_000_000);
             dma_irq_chain_test(uart, &start_addrs, DmaOp::ProgramFast, false);

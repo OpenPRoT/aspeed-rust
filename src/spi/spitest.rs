@@ -211,6 +211,18 @@ pub fn device_info(dev_idx: DeviceId) -> (usize, usize, usize) {
         ),
     }
 }
+
+pub fn show_spi_regiters(uart: &mut UartController<'_>) {
+    test_log!(uart, "SCU registers::");
+    astdebug::print_reg_u32(uart, SCU_BASE + 0x00, 0x40);
+     test_log!(uart, "FMC controller::");
+    astdebug::print_reg_u32(uart, FMC_CTRL_BASE, 0x40);
+    test_log!(uart, "Spi0 controller::");
+    astdebug::print_reg_u32(uart, SPI0_CTRL_BASE, 0x40);
+    test_log!(uart, "Spi1 controller::");
+    astdebug::print_reg_u32(uart, SPI1_CTRL_BASE, 0x40);
+}
+
 pub fn test_cs<D: SpiNorDevice<Error = E>, E>(
     uart: &mut UartController<'_>,
     dev: &mut D,
