@@ -14,6 +14,15 @@ impl embedded_hal::delay::DelayNs for DummyDelay {
     }
 }
 
+pub fn fill_random(buf: &mut [u8], seed: &mut u32) {
+    for b in buf.iter_mut() {
+        *seed ^= *seed << 13;
+        *seed ^= *seed >> 17;
+        *seed ^= *seed << 5;
+        *b = (*seed & 0xFF) as u8;
+    }
+}
+
 #[repr(align(32))]
 pub struct DmaBuffer<const N: usize> {
     pub buf: [u8; N],

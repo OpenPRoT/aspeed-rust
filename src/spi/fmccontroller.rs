@@ -1,26 +1,30 @@
 // Licensed under the Apache-2.0 license
 
-use super::{
-    aspeed_get_spi_freq_div, get_addr_buswidth, get_hclock_rate, get_mid_point_of_longest_one,
-    spi_cal_dummy_cycle, spi_calibration_enable, spi_io_mode, spi_io_mode_user, spi_read_data,
-    spi_write_data, CtrlType, SpiBusWithCs, SpiConfig, SpiData, SpiError, Write, ASPEED_MAX_CS,
-    ASPEED_SPI_NORMAL_READ, ASPEED_SPI_NORMAL_WRITE, ASPEED_SPI_SZ_256M, ASPEED_SPI_SZ_2M,
-    ASPEED_SPI_USER, ASPEED_SPI_USER_INACTIVE, SPI_CALIB_LEN, SPI_CTRL_FREQ_MASK,
-    SPI_DMA_CALC_CKSUM, SPI_DMA_CALIB_MODE, SPI_DMA_DISCARD_REQ_MAGIC, SPI_DMA_ENABLE,
-    SPI_DMA_FLASH_MAP_BASE, SPI_DMA_GET_REQ_MAGIC, SPI_DMA_GRANT, SPI_DMA_RAM_MAP_BASE,
-    SPI_DMA_REQUEST, SPI_DMA_STATUS, SPI_DMA_TIMEOUT,
+use super::consts::{
+    ASPEED_MAX_CS, ASPEED_SPI_NORMAL_READ, ASPEED_SPI_NORMAL_WRITE, ASPEED_SPI_SZ_256M,
+    ASPEED_SPI_SZ_2M, ASPEED_SPI_USER, ASPEED_SPI_USER_INACTIVE, SPI_CALIB_LEN,
+    SPI_CONF_CE0_ENABLE_WRITE_SHIFT, SPI_CTRL_CEX_4BYTE_MODE_SET, SPI_CTRL_CEX_DUMMY_SHIFT,
+    SPI_CTRL_CEX_SPI_CMD_MASK, SPI_CTRL_CEX_SPI_CMD_SHIFT, SPI_CTRL_FREQ_MASK, SPI_DMA_CALC_CKSUM,
+    SPI_DMA_CALIB_MODE, SPI_DMA_CLK_FREQ_MASK, SPI_DMA_CLK_FREQ_SHIFT, SPI_DMA_DELAY_MASK,
+    SPI_DMA_DELAY_SHIFT, SPI_DMA_DISCARD_REQ_MAGIC, SPI_DMA_ENABLE, SPI_DMA_FLASH_MAP_BASE,
+    SPI_DMA_GET_REQ_MAGIC, SPI_DMA_GRANT, SPI_DMA_RAM_MAP_BASE, SPI_DMA_REQUEST, SPI_DMA_STATUS,
+    SPI_DMA_TIMEOUT,
 };
+use super::{
+    aspeed_get_spi_freq_div, get_addr_buswidth, get_cmd_buswidth, get_data_buswidth,
+    get_hclock_rate, get_mid_point_of_longest_one, spi_cal_dummy_cycle, spi_calibration_enable,
+    spi_io_mode, spi_io_mode_user, spi_read_data, spi_write_data, AddressWidth, CtrlType,
+    DataDirection, SpiBusWithCs, SpiConfig, SpiData, SpiError,
+};
+
+use embedded_io::Write;
 
 #[cfg(feature = "spi_dma")]
-use super::{SPI_DMA_TRIGGER_LEN, SPI_NOR_DATA_DIRECT_READ, SPI_NOR_DATA_DIRECT_WRITE};
+use super::consts::SPI_DMA_TRIGGER_LEN;
 
 use crate::dbg;
-use crate::spi::{
-    SPI_CONF_CE0_ENABLE_WRITE_SHIFT, SPI_CTRL_CEX_4BYTE_MODE_SET, SPI_CTRL_CEX_DUMMY_SHIFT,
-    SPI_CTRL_CEX_SPI_CMD_MASK, SPI_CTRL_CEX_SPI_CMD_SHIFT, SPI_DMA_CLK_FREQ_MASK,
-    SPI_DMA_CLK_FREQ_SHIFT, SPI_DMA_DELAY_MASK, SPI_DMA_DELAY_SHIFT,
-};
-use crate::{common::DummyDelay, spi::norflash::SpiNorData, uart_core::UartController};
+
+use crate::{common::DummyDelay, spi::norflash::SpiNorCommand, uart_core::UartController};
 use embedded_hal::{
     delay::DelayNs,
     spi::{ErrorType, SpiBus},
@@ -225,7 +229,7 @@ impl<'a> FmcController<'a> {
         }
     }
 
-    fn spi_nor_read_init(&mut self, cs: usize, op_info: &SpiNorData) {
+    fn spi_nor_read_init(&mut self, cs: usize, op_info: &SpiNorCommand) {
         dbg!(
             self,
             "spi_nor_read_init() cs:{}  master_idx: {}",
@@ -248,16 +252,18 @@ impl<'a> FmcController<'a> {
         self.spi_data.cmd_mode[cs].normal_read = read_cmd;
         dbg!(
             self,
-            "cs: {:08x}, io_mode: {:08x}, dummy: {:08x}, op: {:08x}, normal read: {:08x}",
+            "cs: {:08x}, io_mode: {:08x}, dummy: {:08x}, op: {:08x}, normal read: {:08x}, 
+            address{:08x}",
             cs,
             io_mode,
             dummy,
             op_info.opcode,
-            read_cmd
+            read_cmd,
+            op_info.address.value
         );
 
         cs_ctrlreg_w!(self, cs, read_cmd);
-        if op_info.addr_len == 4 {
+        if matches!(op_info.address.width, AddressWidth::FourByte) {
             self.regs.fmc004().modify(|r, w| unsafe {
                 let current = r.bits();
                 w.bits(current | (SPI_CTRL_CEX_4BYTE_MODE_SET << cs))
@@ -266,7 +272,7 @@ impl<'a> FmcController<'a> {
         if matches!(self.spi_config.ctrl_type, CtrlType::HostSpi) {
             self.regs.fmc06c().modify(|r, w| unsafe {
                 let mut current = r.bits();
-                if op_info.addr_len == 4 {
+                if matches!(op_info.address.width, AddressWidth::FourByte) {
                     current = (current & 0xffff_00ff) | (op_info.opcode << 8);
                 } else {
                     current = (current & 0xffff_ff00) | op_info.opcode;
@@ -278,7 +284,7 @@ impl<'a> FmcController<'a> {
         self.timing_calibration(cs);
     }
 
-    fn spi_nor_write_init(&mut self, cs: usize, op_info: &SpiNorData) {
+    fn spi_nor_write_init(&mut self, cs: usize, op_info: &SpiNorCommand) {
         let io_mode = spi_io_mode(op_info.mode);
         let dummy = 0;
         let write_cmd = (io_mode
@@ -480,7 +486,8 @@ impl<'a> FmcController<'a> {
 
         checksum
     }
-    fn spi_nor_transceive_user(&mut self, op_info: &mut SpiNorData) {
+
+    fn spi_nor_transceive_user(&mut self, op_info: &mut SpiNorCommand) {
         let cs: usize = self.current_cs;
         let dummy = [0u8; 12];
         let start_ptr = self.spi_data.decode_addr[cs].start as *mut u32;
@@ -490,58 +497,63 @@ impl<'a> FmcController<'a> {
             u32::try_from(cs).unwrap(),
             self.spi_data.decode_addr[cs].start
         );
-
+        self.activate_user();
         // Send command
         let cmd_mode = self.spi_data.cmd_mode[cs].user
-            | super::spi_io_mode_user(u32::from(super::get_cmd_buswidth(op_info.mode as u32)));
+            | spi_io_mode_user(u32::from(get_cmd_buswidth(op_info.mode as u32)));
         cs_ctrlreg_w!(self, cs, cmd_mode);
         dbg!(self, "write opcode/cmd: 0x{:08x}", op_info.opcode);
-        unsafe { super::spi_write_data(start_ptr, &[op_info.opcode.try_into().unwrap()]) };
+        unsafe { spi_write_data(start_ptr, &[op_info.opcode.try_into().unwrap()]) };
 
         // Send address
         let addr_mode = self.spi_data.cmd_mode[cs].user
-            | super::spi_io_mode_user(u32::from(super::get_addr_buswidth(op_info.mode as u32)));
+            | spi_io_mode_user(u32::from(get_addr_buswidth(op_info.mode as u32)));
         cs_ctrlreg_w!(self, cs, addr_mode);
 
-        let mut addr = op_info.addr;
-        if op_info.addr_len == 3 {
-            addr <<= 8;
+        let be = op_info.address.value.to_be_bytes();
+
+        let bytes = match op_info.address.width {
+            AddressWidth::ThreeByte => &be[1..], // last 3 bytes (24-bit)
+            AddressWidth::FourByte => &be[..],
+            AddressWidth::None => &[],
+        };
+
+        unsafe {
+            super::spi_write_data(start_ptr, bytes);
         }
 
-        let addr_bytes = addr.to_be_bytes();
-        unsafe { super::spi_write_data(start_ptr, &addr_bytes[..op_info.addr_len as usize]) };
-
         // Dummy cycles
-        let bus_width: u8 = super::get_addr_buswidth(op_info.mode as u32);
+        let bus_width: u8 = get_addr_buswidth(op_info.mode as u32);
         let dummy_len: u8 = (op_info.dummy_cycle / (8 / u32::from(bus_width)))
             .try_into()
             .unwrap();
         dbg!(self, "write dummy len: 0x{:08x}", dummy_len);
-        unsafe { super::spi_write_data(start_ptr, &dummy[..dummy_len as usize]) };
+        unsafe { spi_write_data(start_ptr, &dummy[..dummy_len as usize]) };
 
         // Data transfer
         let data_mode = self.spi_data.cmd_mode[cs].user
-            | spi_io_mode_user(u32::from(super::get_data_buswidth(op_info.mode as u32)));
+            | spi_io_mode_user(u32::from(get_data_buswidth(op_info.mode as u32)));
         cs_ctrlreg_w!(self, cs, data_mode);
 
-        if op_info.data_direct == super::SPI_NOR_DATA_DIRECT_READ {
+        if matches!(op_info.data_direct, DataDirection::DRead) {
             unsafe { spi_read_data(start_ptr, op_info.rx_buf) };
         } else {
             unsafe { spi_write_data(start_ptr, op_info.tx_buf) };
         }
+        self.deactivate_user();
     }
 
     // Helper wrappers would be defined for spi_write_data, spi_read_data, io_mode_user, etc.
 
-    pub fn spi_nor_transceive(&mut self, op_info: &mut SpiNorData) -> Result<(), SpiError> {
+    pub fn spi_nor_transceive(&mut self, op_info: &mut SpiNorCommand) -> Result<(), SpiError> {
         dbg!(self, "spi_nor_transceive()...");
 
         #[cfg(feature = "spi_dma")]
         {
             dbg!(self, "spi dma enabled rx_len:{}", op_info.rx_buf.len());
-            let addr_aligned = op_info.addr % 4 == 0;
+            let addr_aligned = op_info.address.value % 4 == 0;
 
-            if op_info.data_direct == SPI_NOR_DATA_DIRECT_READ {
+            if matches!(op_info.data_direct, DataDirection::DRead) {
                 let buf_aligned = (op_info.rx_buf.as_ptr() as usize) % 4 == 0;
                 let use_dma = !self.spi_config.pure_spi_mode_only
                     && op_info.rx_buf.len() > SPI_DMA_TRIGGER_LEN as usize
@@ -561,7 +573,7 @@ impl<'a> FmcController<'a> {
                 } else {
                     self.spi_nor_transceive_user(op_info);
                 }
-            } else if op_info.data_direct == SPI_NOR_DATA_DIRECT_WRITE {
+            } else if matches!(op_info.data_direct, DataDirection::DWrite) {
                 dbg!(self, "write dma");
                 #[cfg(feature = "spi_dma_write")]
                 {
@@ -590,7 +602,8 @@ impl<'a> FmcController<'a> {
         }
     }
 
-    fn dma_disable(&mut self) {
+    pub fn dma_disable(&mut self) {
+        dbg!(self, "dma disable");
         self.regs.fmc080().write(|w| unsafe { w.bits(0x0) });
 
         self.regs
@@ -598,48 +611,73 @@ impl<'a> FmcController<'a> {
             .write(|w| unsafe { w.bits(SPI_DMA_DISCARD_REQ_MAGIC) });
     }
 
-    fn wait_for_dma_completion(&mut self, timeout: u32) -> Result<(), SpiError> {
+    pub fn wait_for_dma_completion(&mut self, timeout: u32) -> Result<(), SpiError> {
         let mut delay = DummyDelay {};
         let mut to = timeout;
         //wait for_dma done
-        while !self.regs.fmc008().read().dmastatus().is_dma_finish() {
-            delay.delay_ns(500);
-            to -= 1;
+        #[cfg(not(feature = "spi_dma_irq"))]
+        {
+            dbg!(self, "wait_for_dma_completion");
+            while !self.regs.fmc008().read().dmastatus().is_dma_finish() {
+                delay.delay_ns(500);
+                to -= 1;
 
-            if to == 0 {
-                self.dma_disable();
-                return Err(SpiError::DmaTimeout);
+                if to == 0 {
+                    self.dma_disable();
+                    return Err(SpiError::DmaTimeout);
+                }
             }
+            self.dma_disable();
         }
-        self.dma_disable();
         Ok(())
     }
-    /*
+
     fn dma_irq_disable(&mut self) {
-        // Enable the DMA interrupt bit (bit 3)
+        // disable the DMA interrupt bit (bit 3)
+        dbg!(self, "dma_irq_disable");
         self.regs.fmc008().modify(|_, w| w.dmaintenbl().clear_bit());
     }
-
+    #[allow(dead_code)]
     fn dma_irq_enable(&mut self) {
         // Enable the DMA interrupt bit (bit 3)
+        dbg!(self, "dma_irq_enable");
         self.regs.fmc008().modify(|_, w| w.dmaintenbl().set_bit());
     }
+    #[allow(dead_code)]
     fn dbg_fmc_dma(&mut self) {
+        dbg!(self, "reg 0x14: {:14x}", self.regs.fmc014().read().bits());
         dbg!(self, "reg 0x80: {:08x}", self.regs.fmc080().read().bits());
         dbg!(self, "reg 0x84: {:08x}", self.regs.fmc084().read().bits());
         dbg!(self, "reg 0x88: {:08x}", self.regs.fmc088().read().bits());
         dbg!(self, "reg 0x8c: {:08x}", self.regs.fmc08c().read().bits());
     }
-    */
-    pub fn read_dma(&mut self, op: &mut SpiNorData) -> Result<(), SpiError> {
+
+    pub fn handle_interrupt(&mut self) -> Result<(), SpiError> {
+        dbg!(self, "handle interrupt");
+        if !self.regs.fmc008().read().dmastatus().is_dma_finish() {
+            return Err(SpiError::Other("irq error"));
+        }
+        /* disable IRQ */
+        self.dma_irq_disable();
+
+        /* disable DMA */
+        self.dma_disable();
+
+        // Set it to normal read again
         let cs = self.current_cs;
-        dbg!(self, "##### read dma ####");
+        cs_ctrlreg_w!(self, cs, self.spi_data.cmd_mode[cs].normal_read);
+        Ok(())
+    }
+
+    pub fn read_dma(&mut self, op: &mut SpiNorCommand) -> Result<(), SpiError> {
+        let cs = self.current_cs;
+        dbg!(self, "##### fmc read dma ####");
         dbg!(self, "device size: 0x{:08x} dv start: 0x{:08x}, read len: 0x{:08x}, rx_buf:0x{:08x} op addr: 0x{:08x}",
          self.spi_data.decode_addr[cs].len,
          self.spi_data.decode_addr[cs].start,
         op.rx_buf.len(),
         (op.rx_buf.as_ptr() as u32),
-        op.addr);
+        op.address.value);
 
         // Length check
         if op.rx_buf.len() > self.spi_data.decode_addr[cs].len.try_into().unwrap() {
@@ -647,8 +685,8 @@ impl<'a> FmcController<'a> {
         }
 
         // Alignment check
-        if !op.addr.is_multiple_of(4) || !(op.rx_buf.as_ptr() as u32).is_multiple_of(4) {
-            return Err(SpiError::AddressNotAligned(op.addr));
+        if !op.address.value.is_multiple_of(4) || !(op.rx_buf.as_ptr() as u32).is_multiple_of(4) {
+            return Err(SpiError::AddressNotAligned(op.address.value));
         }
         // Construct control value
         let mut ctrl = self.spi_data.cmd_mode[cs].normal_read & SPI_CTRL_FREQ_MASK;
@@ -672,7 +710,8 @@ impl<'a> FmcController<'a> {
             while self.regs.fmc080().read().bits() & SPI_DMA_GRANT != SPI_DMA_GRANT {}
         }
 
-        let flash_start = self.spi_data.decode_addr[cs].start + op.addr - SPI_DMA_FLASH_MAP_BASE;
+        let flash_start =
+            self.spi_data.decode_addr[cs].start + op.address.value - SPI_DMA_FLASH_MAP_BASE;
         dbg!(self, "flash start: 0x{:08x}", flash_start);
         // DMA flash and RAM address
         self.regs.fmc084().write(|w| unsafe { w.bits(flash_start) });
@@ -687,26 +726,37 @@ impl<'a> FmcController<'a> {
             .write(|w| unsafe { w.bits(u32::try_from(read_length).unwrap()) });
 
         // Enable IRQ
-        //self.dma_irq_enable();
+        #[cfg(feature = "spi_dma_irq")]
+        {
+            self.dma_irq_enable();
+        }
+        //self.dbg_fmc_dma();
 
         // Start DMA
+        dbg!(self, "start dma");
         self.regs.fmc080().modify(|_, w| {
             w.dmaenbl().enable_dma_operation();
             w.dmadirection()
                 .read_flash_move_from_flash_to_external_memory()
         });
 
-        dbg!(self, "start wait for dma");
         self.wait_for_dma_completion(SPI_DMA_TIMEOUT)
     }
 
     #[allow(dead_code)]
-    fn write_dma(&mut self, op: &mut SpiNorData) -> Result<(), SpiError> {
+    fn write_dma(&mut self, op: &mut SpiNorCommand) -> Result<(), SpiError> {
         let cs = self.current_cs;
         dbg!(self, "##### write_dma ####");
+        dbg!(self, "device size: 0x{:08x} dv start: 0x{:08x}, read len: 0x{:08x}, tx_buf:0x{:08x} op addr: 0x{:08x}",
+         self.spi_data.decode_addr[cs].len,
+         self.spi_data.decode_addr[cs].start,
+        op.tx_buf.len(),
+        (op.tx_buf.as_ptr() as u32),
+        op.address.value);
+        //self.dbg_fmc_dma();
         // Check alignment and bounds
-        if !op.addr.is_multiple_of(4) || !(op.tx_buf.as_ptr() as usize).is_multiple_of(4) {
-            return Err(SpiError::AddressNotAligned(op.addr));
+        if !op.address.value.is_multiple_of(4) || !(op.tx_buf.as_ptr() as usize).is_multiple_of(4) {
+            return Err(SpiError::AddressNotAligned(op.address.value));
         }
         if op.tx_buf.len() > self.spi_data.decode_addr[cs].len.try_into().unwrap() {
             return Err(SpiError::Other("Write length exceeds decode region"));
@@ -732,7 +782,7 @@ impl<'a> FmcController<'a> {
 
         // Program addresses
         self.regs.fmc084().write(|w| unsafe {
-            w.bits(self.spi_data.decode_addr[cs].start + op.addr - SPI_DMA_FLASH_MAP_BASE)
+            w.bits(self.spi_data.decode_addr[cs].start + op.address.value - SPI_DMA_FLASH_MAP_BASE)
         });
         self.regs.fmc088().write(|w| unsafe {
             w.bits(u32::try_from(op.tx_buf.as_ptr() as usize).unwrap() + SPI_DMA_RAM_MAP_BASE)
@@ -740,76 +790,35 @@ impl<'a> FmcController<'a> {
         self.regs
             .fmc08c()
             .write(|w| unsafe { w.bits(u32::try_from(op.tx_buf.len()).unwrap() - 1) });
+        //self.dbg_fmc_dma();
 
         // Enable DMA IRQ if needed
-        // self.enable_dma_irq(); // implement if necessary
+        #[cfg(feature = "spi_dma_irq")]
+        {
+            self.dma_irq_enable();
+        }
+
         // Start DMA with write direction
         self.regs.fmc080().modify(|_, w| {
             w.dmaenbl().enable_dma_operation();
             w.dmadirection()
                 .write_flash_move_from_external_memory_to_flash()
         });
-
         self.wait_for_dma_completion(SPI_DMA_TIMEOUT)
     }
-}
 
-impl SpiBus<u8> for FmcController<'_> {
-    // we only use mmap for all transaction
-    fn read(&mut self, buffer: &mut [u8]) -> Result<(), SpiError> {
-        let ahb_addr = self.spi_data.decode_addr[self.current_cs].start as usize as *const u32;
-        unsafe { spi_read_data(ahb_addr, buffer) };
-        Ok(())
-    }
-
-    fn write(&mut self, buffer: &[u8]) -> Result<(), SpiError> {
-        let ahb_addr = self.spi_data.decode_addr[self.current_cs].start as usize as *mut u32;
-        unsafe { spi_write_data(ahb_addr, buffer) };
-        Ok(())
-    }
-
-    fn transfer(&mut self, rd_buffer: &mut [u8], wr_buffer: &[u8]) -> Result<(), SpiError> {
+    fn activate_user(&mut self) {
         let cs = self.current_cs;
-        if !wr_buffer.is_empty() {
-            let ahb_addr = self.spi_data.decode_addr[cs].start as usize as *mut u32;
-            unsafe { spi_write_data(ahb_addr, wr_buffer) };
-        }
-        cortex_m::asm::delay(2);
-        if !rd_buffer.is_empty() {
-            let ahb_addr = self.spi_data.decode_addr[cs].start as usize as *const u32;
-            // Read RX buffer
-            unsafe { super::spi_read_data(ahb_addr, rd_buffer) };
-        }
-        Ok(())
-    }
-
-    fn transfer_in_place(&mut self, _buffer: &mut [u8]) -> Result<(), SpiError> {
-        todo!()
-    }
-
-    fn flush(&mut self) -> Result<(), SpiError> {
-        todo!()
-    }
-}
-
-impl SpiBusWithCs for FmcController<'_> {
-    fn select_cs(&mut self, cs: usize) -> Result<(), SpiError> {
         let user_reg = self.spi_data.cmd_mode[cs].user;
-        if cs > self.spi_config.max_cs {
-            return Err(SpiError::CsSelectFailed(cs));
-        }
-        self.current_cs = cs;
         cs_ctrlreg_w!(self, cs, user_reg | ASPEED_SPI_USER_INACTIVE);
         cs_ctrlreg_w!(self, cs, user_reg);
         dbg!(self, "activate cs:{}", u32::try_from(cs).unwrap());
-        Ok(())
     }
 
-    fn deselect_cs(&mut self, cs: usize) -> Result<(), SpiError> {
+    fn deactivate_user(&mut self) {
+        let cs = self.current_cs;
         let user_reg = self.spi_data.cmd_mode[cs].user;
-        if cs > self.spi_config.max_cs {
-            return Err(SpiError::CsSelectFailed(cs));
-        }
+
         cs_ctrlreg_w!(self, cs, user_reg | ASPEED_SPI_USER_INACTIVE);
         cs_ctrlreg_w!(self, cs, self.spi_data.cmd_mode[cs].normal_read);
         dbg!(self, "deactivate cs:{}", u32::try_from(cs).unwrap());
@@ -818,19 +827,72 @@ impl SpiBusWithCs for FmcController<'_> {
             "normal read:{:08x}",
             self.spi_data.cmd_mode[cs].normal_read
         );
+    }
+}
+
+impl SpiBus<u8> for FmcController<'_> {
+    // we only use mmap for all transaction
+    fn read(&mut self, buffer: &mut [u8]) -> Result<(), SpiError> {
+        let ahb_addr = self.spi_data.decode_addr[self.current_cs].start as usize as *const u32;
+        self.activate_user();
+        unsafe { spi_read_data(ahb_addr, buffer) };
+        self.deactivate_user();
         Ok(())
     }
 
-    fn nor_transfer(&mut self, op_info: &mut SpiNorData) -> Result<(), SpiError> {
+    fn write(&mut self, buffer: &[u8]) -> Result<(), SpiError> {
+        let ahb_addr = self.spi_data.decode_addr[self.current_cs].start as usize as *mut u32;
+        self.activate_user();
+        unsafe { spi_write_data(ahb_addr, buffer) };
+        self.deactivate_user();
+        Ok(())
+    }
+
+    fn transfer(&mut self, rd_buffer: &mut [u8], wr_buffer: &[u8]) -> Result<(), SpiError> {
+        let cs = self.current_cs;
+        self.activate_user();
+        if !wr_buffer.is_empty() {
+            let ahb_addr = self.spi_data.decode_addr[cs].start as usize as *mut u32;
+            unsafe { spi_write_data(ahb_addr, wr_buffer) };
+        }
+        cortex_m::asm::delay(2);
+        if !rd_buffer.is_empty() {
+            let ahb_addr = self.spi_data.decode_addr[cs].start as usize as *const u32;
+            // Read RX buffer
+            unsafe { spi_read_data(ahb_addr, rd_buffer) };
+        }
+        self.deactivate_user();
+        Ok(())
+    }
+
+    fn transfer_in_place(&mut self, _buffer: &mut [u8]) -> Result<(), SpiError> {
+        Err(SpiError::Other("transfer_in_place not supported"))
+    }
+
+    fn flush(&mut self) -> Result<(), SpiError> {
+        Err(SpiError::Other("flush not supported"))
+    }
+}
+
+impl SpiBusWithCs for FmcController<'_> {
+    fn select_cs(&mut self, cs: usize) -> Result<(), SpiError> {
+        if cs >= self.spi_config.max_cs {
+            return Err(SpiError::CsSelectFailed(cs));
+        }
+        self.current_cs = cs;
+        Ok(())
+    }
+
+    fn nor_transfer(&mut self, op_info: &mut SpiNorCommand) -> Result<(), SpiError> {
         let _ = self.spi_nor_transceive(op_info);
         Ok(())
     }
 
-    fn nor_read_init(&mut self, cs: usize, op_info: &SpiNorData) {
+    fn nor_read_init(&mut self, cs: usize, op_info: &SpiNorCommand) {
         self.spi_nor_read_init(cs, op_info);
     }
 
-    fn nor_write_init(&mut self, cs: usize, op_info: &SpiNorData) {
+    fn nor_write_init(&mut self, cs: usize, op_info: &SpiNorCommand) {
         self.spi_nor_write_init(cs, op_info);
     }
 

@@ -1,40 +1,45 @@
 // Licensed under the Apache-2.0 license
 
+use crate::spimonitor::SpiMonitorNum;
+
 use super::SpiBusWithCs;
 use super::SpiError;
-use crate::spimonitor::{SpiMonitor, SpipfInstance};
 use embedded_hal::spi::{ErrorType, Operation, SpiDevice};
 
 #[derive(Debug)]
-pub struct ChipSelectDevice<'a, B, SPIPF>
+pub struct ChipSelectDevice<'a, B>
 where
     B: SpiBusWithCs,
-    SPIPF: SpipfInstance,
 {
     pub bus: &'a mut B,
     pub cs: usize,
-    pub spi_monitor: Option<&'a mut SpiMonitor<SPIPF>>,
+    pub spim: Option<SpiMonitorNum>,
 }
 
-impl<B, SPIPF> ErrorType for ChipSelectDevice<'_, B, SPIPF>
+impl<B> ErrorType for ChipSelectDevice<'_, B>
 where
     B: SpiBusWithCs,
-    SPIPF: SpipfInstance,
 {
     type Error = B::Error;
 }
 
-impl<B, SPIPF> SpiDevice for ChipSelectDevice<'_, B, SPIPF>
+impl From<SpiMonitorNum> for u32 {
+    #[inline]
+    fn from(v: SpiMonitorNum) -> u32 {
+        v as u32
+    }
+}
+
+impl<B> SpiDevice for ChipSelectDevice<'_, B>
 where
     B: SpiBusWithCs,
-    SPIPF: SpipfInstance,
 {
     fn transaction(&mut self, operations: &mut [Operation<'_, u8>]) -> Result<(), SpiError> {
         self.bus.select_cs(self.cs)?;
-        if let Some(spim) = self.spi_monitor.as_mut() {
+        if let Some(spim) = self.spim {
             if self.bus.get_master_id() != 0 {
-                spim.spim_scu_ctrl_set(0x8, 0x8);
-                spim.spim_scu_ctrl_set(0x7, 1 + SPIPF::FILTER_ID as u32);
+                super::spim_scu_ctrl_set(0x8, 0x8);
+                super::spim_scu_ctrl_set(0x7, 1 + u32::from(spim));
             }
             super::spim_proprietary_pre_config();
         }
@@ -45,17 +50,15 @@ where
                 Operation::Write(buf) => self.bus.write(buf)?,
                 Operation::Transfer(read, write) => self.bus.transfer(read, write)?,
                 Operation::TransferInPlace(buf) => self.bus.transfer_in_place(buf)?,
-                Operation::DelayNs(_) => todo!(),
+                Operation::DelayNs(_) => {} // Ignore delay, as the SPI controller will handle timing
             }
         }
-
-        super::spim_proprietary_post_config();
-        if let Some(spim) = self.spi_monitor.as_mut() {
+        if let Some(_spim) = self.spim {
+            super::spim_proprietary_post_config();
             if self.bus.get_master_id() != 0 {
-                spim.spim_scu_ctrl_clear(0xf);
+                super::spim_scu_ctrl_clear(0xf);
             }
         }
-        self.bus.deselect_cs(self.cs)?;
         Ok(())
     }
 

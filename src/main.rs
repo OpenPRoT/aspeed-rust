@@ -18,7 +18,6 @@ use aspeed_ddk::{i2c_core, spi};
 use fugit::MillisDurationU32 as MilliSeconds;
 
 use aspeed_ddk::tests::functional::ecdsa_test::run_ecdsa_tests;
-use aspeed_ddk::tests::functional::gpio_test;
 use aspeed_ddk::tests::functional::hash_test::run_hash_tests;
 use aspeed_ddk::tests::functional::hmac_test::run_hmac_tests;
 use aspeed_ddk::tests::functional::i2c_core_test::run_i2c_core_tests;
@@ -26,6 +25,7 @@ use aspeed_ddk::tests::functional::i2c_master_slave_test::run_master_slave_tests
 use aspeed_ddk::tests::functional::i2c_test;
 use aspeed_ddk::tests::functional::rsa_test::run_rsa_tests;
 use aspeed_ddk::tests::functional::timer_test::run_timer_tests;
+use aspeed_ddk::tests::functional::{gpio_test, spim_test};
 use panic_halt as _;
 
 // Import owned API traits and types
@@ -327,12 +327,40 @@ fn main() -> ! {
     writeln!(uart_controller, "\r\nHello, world!!\r\n").unwrap();
 
     let delay = DummyDelay;
+
     let mut syscon = SysCon::new(delay.clone(), scu);
 
     // Enable HACE (Hash and Crypto Engine)
     let _ = syscon.enable_clock(ClockId::ClkYCLK as u8);
     let reset_id = ResetId::RstHACE;
     let _ = syscon.reset_deassert(&reset_id);
+
+    spi::spitest::show_spi_regiters(&mut uart_controller);
+    let test_spicontroller = false;
+    let test_irq = false;
+    if test_spicontroller {
+        spi::spidmairqtest::init_spidmairq_app_once();
+        if test_irq {
+            writeln!(uart_controller, "\r\nTEST SPI IRQ!!\r\n").unwrap();
+
+            spi::spidmairqtest::test_fmc_dma_irq(&mut uart_controller);
+            spi::spidmairqtest::test_spi_dma_irq(&mut uart_controller);
+        } else {
+            spi::spitest::test_fmc(&mut uart_controller);
+            spi::spitest::test_spi(&mut uart_controller);
+            //gpio_test::test_gpio_flash_power(&mut uart_controller);
+            // spi::spitest::test_spi2(&mut uart_controller);
+        }
+        let mut delay1 = DummyDelay;
+        delay1.delay_ns(10_000_000);
+    }
+    let spim_test = false;
+    if spim_test {
+        // use to release ast2600
+        spim_test::test_spim0(&mut uart_controller);
+        gpio_test::test_gpio_flash_power(&mut uart_controller);
+        gpio_test::test_gpio_bmc_reset(&mut uart_controller);
+    }
 
     let mut hace_controller = HaceController::new(hace);
 
@@ -352,6 +380,7 @@ fn main() -> ! {
     let mut rsa = AspeedRsa::new(&secure, delay);
     run_rsa_tests(&mut uart_controller, &mut rsa);
     gpio_test::test_gpioa(&mut uart_controller);
+
     i2c_test::test_i2c_master(&mut uart_controller);
     #[cfg(feature = "i2c_target")]
     i2c_test::test_i2c_slave(&mut uart_controller);
@@ -372,14 +401,6 @@ fn main() -> ! {
     test_wdt(&mut uart_controller);
     run_timer_tests(&mut uart_controller);
 
-    let test_spicontroller = false;
-    if test_spicontroller {
-        spi::spitest::test_fmc(&mut uart_controller);
-        spi::spitest::test_spi(&mut uart_controller);
-
-        gpio_test::test_gpio_flash_power(&mut uart_controller);
-        spi::spitest::test_spi2(&mut uart_controller);
-    }
     // Initialize the peripherals here if needed
     loop {
         cortex_m::asm::wfi();
