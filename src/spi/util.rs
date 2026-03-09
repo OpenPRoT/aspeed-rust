@@ -1,10 +1,8 @@
 // Licensed under the Apache-2.0 license
 
-use crate::{
-    spi::norflash::{Jesd216Mode},
-};
-use ast1060_pac::Scu;
 use super::consts::HPLL_FREQ;
+use crate::spi::norflash::Jesd216Mode;
+use ast1060_pac::Scu;
 
 #[macro_export]
 macro_rules! dbg {
@@ -193,7 +191,7 @@ pub unsafe fn spi_read_data(ahb_addr: *const u32, read_arr: &mut [u8]) {
 
 #[allow(clippy::missing_safety_doc)]
 pub unsafe fn spi_write_data(ahb_addr: *mut u32, write_arr: &[u8]) {
-    if write_arr.is_empty() {        
+    if write_arr.is_empty() {
         return;
     }
 

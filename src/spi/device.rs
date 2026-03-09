@@ -50,7 +50,7 @@ where
                 Operation::Write(buf) => self.bus.write(buf)?,
                 Operation::Transfer(read, write) => self.bus.transfer(read, write)?,
                 Operation::TransferInPlace(buf) => self.bus.transfer_in_place(buf)?,
-                Operation::DelayNs(_) => {}, // Ignore delay, as the SPI controller will handle timing
+                Operation::DelayNs(_) => {} // Ignore delay, as the SPI controller will handle timing
             }
         }
         if let Some(_spim) = self.spim {

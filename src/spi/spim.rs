@@ -4,11 +4,11 @@ use crate::modify_reg;
 use core::cell::Cell;
 use critical_section::Mutex;
 
+use super::consts::{
+    PIN_SPIM0_CLK_OUT_BIT, PIN_SPIM1_CLK_OUT_BIT, PIN_SPIM2_CLK_OUT_BIT, PIN_SPIM3_CLK_OUT_BIT,
+};
 
-use super::consts::{PIN_SPIM0_CLK_OUT_BIT, PIN_SPIM1_CLK_OUT_BIT, PIN_SPIM2_CLK_OUT_BIT, PIN_SPIM3_CLK_OUT_BIT};
-
-static GPIO_ORI_VAL: Mutex<[Cell<u32>; 4]> =
-    Mutex::new([const { Cell::new(0) }; 4]);
+static GPIO_ORI_VAL: Mutex<[Cell<u32>; 4]> = Mutex::new([const { Cell::new(0) }; 4]);
 
 #[must_use]
 pub fn get_gpio_ori_val() -> [u32; 4] {

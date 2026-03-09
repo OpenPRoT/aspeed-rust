@@ -54,4 +54,3 @@ pub(crate) const PIN_SPIM0_CLK_OUT_BIT: u32 = 7;
 pub(crate) const PIN_SPIM1_CLK_OUT_BIT: u32 = 21;
 pub(crate) const PIN_SPIM2_CLK_OUT_BIT: u32 = 3;
 pub(crate) const PIN_SPIM3_CLK_OUT_BIT: u32 = 17;
-

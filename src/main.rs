@@ -335,47 +335,11 @@ fn main() -> ! {
     let reset_id = ResetId::RstHACE;
     let _ = syscon.reset_deassert(&reset_id);
 
-    let mut hace_controller = HaceController::new(hace);
-
-    run_hash_tests(&mut uart_controller, &mut hace_controller);
-
-    run_hmac_tests(&mut uart_controller, &mut hace_controller);
-
-    // Test the owned digest API
-    test_owned_digest_api(&mut uart_controller);
-
-    // Enable RSA and ECC
-    let _ = syscon.enable_clock(ClockId::ClkRSACLK as u8);
-
-    let mut ecdsa = AspeedEcdsa::new(&secure, delay.clone());
-   // run_ecdsa_tests(&mut uart_controller, &mut ecdsa);
-
-    let mut rsa = AspeedRsa::new(&secure, delay);
-    run_rsa_tests(&mut uart_controller, &mut rsa);
-    gpio_test::test_gpioa(&mut uart_controller);
-    i2c_test::test_i2c_master(&mut uart_controller);
-    #[cfg(feature = "i2c_target")]
-    i2c_test::test_i2c_slave(&mut uart_controller);
-
-    // Run i2c_core functional tests
-    run_i2c_core_tests(&mut uart_controller);
-    {
-        //I2C core test on real hardware
-        i2c_core::init_i2c_global();
-        //run_master_tests(&mut uart_controller);
-        #[cfg(feature = "i2c_target")]
-        run_slave_tests(&mut uart_controller);
-    }
-
-    // Run I2C master-slave hardware integration tests
-    run_master_slave_tests(&mut uart_controller);
-
-    test_wdt(&mut uart_controller);
-    run_timer_tests(&mut uart_controller);
-
-    let test_spicontroller = true;
-    let test_irq = true;
+    spi::spitest::show_spi_regiters(&mut uart_controller);
+    let test_spicontroller = false;
+    let test_irq = false;
     if test_spicontroller {
+        spi::spidmairqtest::init_spidmairq_app_once();
         if test_irq {
             writeln!(uart_controller, "\r\nTEST SPI IRQ!!\r\n").unwrap();
 
@@ -397,6 +361,46 @@ fn main() -> ! {
         gpio_test::test_gpio_flash_power(&mut uart_controller);
         gpio_test::test_gpio_bmc_reset(&mut uart_controller);
     }
+
+    let mut hace_controller = HaceController::new(hace);
+
+    run_hash_tests(&mut uart_controller, &mut hace_controller);
+
+    run_hmac_tests(&mut uart_controller, &mut hace_controller);
+
+    // Test the owned digest API
+    test_owned_digest_api(&mut uart_controller);
+
+    // Enable RSA and ECC
+    let _ = syscon.enable_clock(ClockId::ClkRSACLK as u8);
+
+    let mut ecdsa = AspeedEcdsa::new(&secure, delay.clone());
+    run_ecdsa_tests(&mut uart_controller, &mut ecdsa);
+
+    let mut rsa = AspeedRsa::new(&secure, delay);
+    run_rsa_tests(&mut uart_controller, &mut rsa);
+    gpio_test::test_gpioa(&mut uart_controller);
+
+    i2c_test::test_i2c_master(&mut uart_controller);
+    #[cfg(feature = "i2c_target")]
+    i2c_test::test_i2c_slave(&mut uart_controller);
+
+    // Run i2c_core functional tests
+    run_i2c_core_tests(&mut uart_controller);
+    {
+        //I2C core test on real hardware
+        i2c_core::init_i2c_global();
+        //run_master_tests(&mut uart_controller);
+        #[cfg(feature = "i2c_target")]
+        run_slave_tests(&mut uart_controller);
+    }
+
+    // Run I2C master-slave hardware integration tests
+    run_master_slave_tests(&mut uart_controller);
+
+    test_wdt(&mut uart_controller);
+    run_timer_tests(&mut uart_controller);
+
     // Initialize the peripherals here if needed
     loop {
         cortex_m::asm::wfi();

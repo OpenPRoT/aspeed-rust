@@ -1,25 +1,27 @@
 // Licensed under the Apache-2.0 license
 
 use super::{
-    aspeed_get_spi_freq_div, get_addr_buswidth, get_hclock_rate, get_mid_point_of_longest_one,
-    spi_cal_dummy_cycle, spi_calibration_enable, spi_io_mode, spi_io_mode_user, spi_read_data,
-    spi_write_data, CtrlType, SpiBusWithCs, SpiConfig, SpiData, SpiError, get_cmd_buswidth,
-    get_data_buswidth, DataDirection, AddressWidth,
+    aspeed_get_spi_freq_div, get_addr_buswidth, get_cmd_buswidth, get_data_buswidth,
+    get_hclock_rate, get_mid_point_of_longest_one, spi_cal_dummy_cycle, spi_calibration_enable,
+    spi_io_mode, spi_io_mode_user, spi_read_data, spi_write_data, AddressWidth, CtrlType,
+    DataDirection, SpiBusWithCs, SpiConfig, SpiData, SpiError,
 };
 
-use super::consts::{ASPEED_MAX_CS,ASPEED_SPI_NORMAL_READ, ASPEED_SPI_NORMAL_WRITE, ASPEED_SPI_SZ_256M, 
-    ASPEED_SPI_SZ_2M, ASPEED_SPI_USER, ASPEED_SPI_USER_INACTIVE, SPI_CALIB_LEN, 
-    SPI_CTRL_FREQ_MASK, SPI_DMA_CALC_CKSUM, SPI_DMA_CALIB_MODE, SPI_DMA_DISCARD_REQ_MAGIC, 
-    SPI_DMA_ENABLE, SPI_DMA_FLASH_MAP_BASE, SPI_DMA_GET_REQ_MAGIC, SPI_DMA_GRANT, 
-    SPI_DMA_RAM_MAP_BASE, SPI_DMA_REQUEST, SPI_DMA_STATUS, SPI_DMA_TIMEOUT,
-    SPI_CTRL_CEX_4BYTE_MODE_SET, SPI_CTRL_CEX_DUMMY_SHIFT, SPI_CTRL_CEX_SPI_CMD_MASK, 
-    SPI_CTRL_CEX_SPI_CMD_SHIFT, SPI_DMA_CLK_FREQ_SHIFT, SPI_DMA_CLK_FREQ_MASK, SPI_DMA_DELAY_MASK, 
-    SPI_DMA_DELAY_SHIFT, SPI_CONF_CE0_ENABLE_WRITE_SHIFT};
+use super::consts::{
+    ASPEED_MAX_CS, ASPEED_SPI_NORMAL_READ, ASPEED_SPI_NORMAL_WRITE, ASPEED_SPI_SZ_256M,
+    ASPEED_SPI_SZ_2M, ASPEED_SPI_USER, ASPEED_SPI_USER_INACTIVE, SPI_CALIB_LEN,
+    SPI_CONF_CE0_ENABLE_WRITE_SHIFT, SPI_CTRL_CEX_4BYTE_MODE_SET, SPI_CTRL_CEX_DUMMY_SHIFT,
+    SPI_CTRL_CEX_SPI_CMD_MASK, SPI_CTRL_CEX_SPI_CMD_SHIFT, SPI_CTRL_FREQ_MASK, SPI_DMA_CALC_CKSUM,
+    SPI_DMA_CALIB_MODE, SPI_DMA_CLK_FREQ_MASK, SPI_DMA_CLK_FREQ_SHIFT, SPI_DMA_DELAY_MASK,
+    SPI_DMA_DELAY_SHIFT, SPI_DMA_DISCARD_REQ_MAGIC, SPI_DMA_ENABLE, SPI_DMA_FLASH_MAP_BASE,
+    SPI_DMA_GET_REQ_MAGIC, SPI_DMA_GRANT, SPI_DMA_RAM_MAP_BASE, SPI_DMA_REQUEST, SPI_DMA_STATUS,
+    SPI_DMA_TIMEOUT,
+};
 
 use embedded_io::Write;
 
 #[cfg(feature = "spi_dma")]
-use super::consts::{SPI_DMA_TRIGGER_LEN};
+use super::consts::SPI_DMA_TRIGGER_LEN;
 
 use crate::dbg;
 
@@ -541,9 +543,9 @@ impl<'a> SpiController<'a> {
         let be = op_info.address.value.to_be_bytes();
 
         let bytes = match op_info.address.width {
-             AddressWidth::ThreeByte => &be[1..], // last 3 bytes (24-bit)
-             AddressWidth::FourByte =>  &be[..],
-             AddressWidth::None => &[],
+            AddressWidth::ThreeByte => &be[1..], // last 3 bytes (24-bit)
+            AddressWidth::FourByte => &be[..],
+            AddressWidth::None => &[],
         };
 
         unsafe {
@@ -749,7 +751,8 @@ impl<'a> SpiController<'a> {
             while self.regs.spi080().read().bits() & SPI_DMA_GRANT != SPI_DMA_GRANT {}
         }
 
-        let flash_start = self.spi_data.decode_addr[cs].start + op.address.value - SPI_DMA_FLASH_MAP_BASE;
+        let flash_start =
+            self.spi_data.decode_addr[cs].start + op.address.value - SPI_DMA_FLASH_MAP_BASE;
         dbg!(self, "flash start: 0x{:08x}", flash_start);
 
         // DMA flash and RAM address

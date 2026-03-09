@@ -2,7 +2,7 @@
 
 use super::device::ChipSelectDevice;
 use super::SpiBusWithCs;
-use super::{norflash, SpiError,DataDirection, FlashAddress, AddressWidth};
+use super::{norflash, AddressWidth, DataDirection, FlashAddress, SpiError};
 use crate::common::DummyDelay;
 use embedded_hal::delay::DelayNs;
 
@@ -155,7 +155,10 @@ where
             mode: Jesd216Mode::Mode111,
             opcode: SPI_NOR_CMD_WREN,
             dummy_cycle: 0,
-            address: FlashAddress { value: 0, width: AddressWidth::None },
+            address: FlashAddress {
+                value: 0,
+                width: AddressWidth::None,
+            },
             data_len: 0,
             data_direct: DataDirection::DWrite,
             tx_buf: &[],
@@ -170,7 +173,10 @@ where
             mode: Jesd216Mode::Mode111,
             opcode: SPI_NOR_CMD_WRDI,
             dummy_cycle: 0,
-            address: FlashAddress { value: 0, width: AddressWidth::None },
+            address: FlashAddress {
+                value: 0,
+                width: AddressWidth::None,
+            },
             data_len: 0,
             data_direct: DataDirection::DWrite,
             tx_buf: &[],
@@ -186,7 +192,10 @@ where
             mode: Jesd216Mode::Mode111,
             opcode: 0x9F,
             dummy_cycle: 0,
-            address: FlashAddress { value: 0, width: AddressWidth::None },
+            address: FlashAddress {
+                value: 0,
+                width: AddressWidth::None,
+            },
             data_len: 0,
             rx_buf: &mut read_buf,
             tx_buf: &[],
@@ -203,7 +212,10 @@ where
                 mode: Jesd216Mode::Mode111,
                 opcode: norflash::SPI_NOR_CMD_SE,
                 dummy_cycle: 0,
-                address: FlashAddress { value: addr, width: AddressWidth::ThreeByte },
+                address: FlashAddress {
+                    value: addr,
+                    width: AddressWidth::ThreeByte,
+                },
                 data_len: 0,
                 tx_buf: &[],
                 rx_buf: &mut [],
@@ -223,7 +235,10 @@ where
             mode: Jesd216Mode::Mode111,
             opcode: norflash::SPI_NOR_CMD_PP,
             dummy_cycle: 0,
-            address: FlashAddress { value: addr, width: AddressWidth::ThreeByte },
+            address: FlashAddress {
+                value: addr,
+                width: AddressWidth::ThreeByte,
+            },
             data_len: u32::try_from(data.len()).unwrap(),
             tx_buf: data,
             rx_buf: &mut [],
@@ -239,7 +254,10 @@ where
             mode: Jesd216Mode::Mode111,
             opcode: norflash::SPI_NOR_CMD_PP_4B,
             dummy_cycle: 0,
-            address: FlashAddress { value: addr, width: AddressWidth::FourByte },
+            address: FlashAddress {
+                value: addr,
+                width: AddressWidth::FourByte,
+            },
             data_len: u32::try_from(data.len()).unwrap(),
             tx_buf: data,
             rx_buf: &mut [],
@@ -254,7 +272,10 @@ where
             mode: Jesd216Mode::Mode114,
             opcode: SPI_NOR_CMD_QREAD,
             dummy_cycle: 8,
-            address: FlashAddress { value: addr, width: AddressWidth::ThreeByte },
+            address: FlashAddress {
+                value: addr,
+                width: AddressWidth::ThreeByte,
+            },
             data_len: u32::try_from(buf.len()).unwrap(),
             tx_buf: &[],
             rx_buf: buf,
@@ -269,7 +290,10 @@ where
             mode: Jesd216Mode::Mode111Fast,
             opcode: SPI_NOR_CMD_READ_FAST_4B,
             dummy_cycle: 8,
-            address: FlashAddress { value: addr, width: AddressWidth::FourByte },
+            address: FlashAddress {
+                value: addr,
+                width: AddressWidth::FourByte,
+            },
             data_len: u32::try_from(buf.len()).unwrap(),
             tx_buf: &[],
             rx_buf: buf,
@@ -285,7 +309,10 @@ where
             mode: Jesd216Mode::Mode111,
             opcode: SPI_NOR_CMD_RESET_EN,
             dummy_cycle: 0,
-            address: FlashAddress { value: 0x0, width: AddressWidth::None },
+            address: FlashAddress {
+                value: 0x0,
+                width: AddressWidth::None,
+            },
             data_len: 0,
             tx_buf: &[],
             rx_buf: &mut [],
@@ -300,7 +327,10 @@ where
             mode: Jesd216Mode::Mode111,
             opcode: SPI_NOR_CMD_RESET_MEM,
             dummy_cycle: 0,
-            address: FlashAddress { value: 0x0, width: AddressWidth::None },
+            address: FlashAddress {
+                value: 0x0,
+                width: AddressWidth::None,
+            },
             data_len: 0x0,
             tx_buf: &[],
             rx_buf: &mut [],
@@ -351,7 +381,10 @@ where
             mode: Jesd216Mode::Mode111,
             opcode: SPI_NOR_CMD_RDSR,
             dummy_cycle: 0,
-            address: FlashAddress { value: 0, width: AddressWidth::None },
+            address: FlashAddress {
+                value: 0,
+                width: AddressWidth::None,
+            },
             data_len: 1,
             tx_buf: &[],
             rx_buf: &mut buf,

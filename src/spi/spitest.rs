@@ -5,12 +5,14 @@
 
 use super::device::ChipSelectDevice;
 use super::fmccontroller::FmcController;
+use super::norflash;
 use super::norflash::{
     Jesd216Mode, SpiNorCommand, SpiNorDevice, SPI_NOR_CMD_QREAD, SPI_NOR_CMD_READ_FAST_4B,
 };
-use super::{ norflash };
-use super::{CommandMode, CtrlType, SpiConfig, SpiData, SpiDecodeAddress, DataDirection,
-    AddressWidth, FlashAddress};
+use super::{
+    AddressWidth, CommandMode, CtrlType, DataDirection, FlashAddress, SpiConfig, SpiData,
+    SpiDecodeAddress,
+};
 use crate::common::{self, DmaBuffer, DummyDelay};
 use crate::spi::norflashblockdevice;
 use crate::spi::norflashblockdevice::{BlockAddrUsize, NorFlashBlockDevice};
@@ -20,8 +22,8 @@ use crate::uart_core::{UartConfig, UartController};
 use crate::{astdebug, pinctrl};
 use embedded_hal::delay::DelayNs;
 use embedded_hal::spi::SpiDevice;
-use proposed_traits::block_device::{BlockDevice, BlockRange};
 use embedded_io::Write;
+use proposed_traits::block_device::{BlockDevice, BlockRange};
 
 pub const FMC_CTRL_BASE: usize = 0x7e62_0000;
 pub const FMC_MMAP_BASE: usize = 0x8000_0000;
@@ -119,7 +121,10 @@ pub fn nor_device_read_data<'a>(len: usize) -> SpiNorCommand<'a> {
         mode: Jesd216Mode::Mode114,
         opcode: SPI_NOR_CMD_QREAD,
         dummy_cycle: 8,
-        address: FlashAddress { value: 0x0, width: AddressWidth::ThreeByte },      
+        address: FlashAddress {
+            value: 0x0,
+            width: AddressWidth::ThreeByte,
+        },
         data_len: u32::try_from(len).unwrap(),
         tx_buf: &[],
         rx_buf: &mut [],
@@ -133,7 +138,10 @@ pub fn nor_device_write_data<'a>(len: usize) -> SpiNorCommand<'a> {
         mode: Jesd216Mode::Mode111,
         opcode: norflash::SPI_NOR_CMD_PP,
         dummy_cycle: 0,
-        address: FlashAddress { value: 0x0, width: AddressWidth::ThreeByte },
+        address: FlashAddress {
+            value: 0x0,
+            width: AddressWidth::ThreeByte,
+        },
         data_len: u32::try_from(len).unwrap(),
         tx_buf: &[],
         rx_buf: &mut [],
@@ -147,7 +155,10 @@ pub fn nor_device_read_4b_data<'a>(len: usize) -> SpiNorCommand<'a> {
         mode: Jesd216Mode::Mode111Fast,
         opcode: SPI_NOR_CMD_READ_FAST_4B,
         dummy_cycle: 8,
-        address: FlashAddress { value: 0x0, width: AddressWidth::FourByte },
+        address: FlashAddress {
+            value: 0x0,
+            width: AddressWidth::FourByte,
+        },
         data_len: u32::try_from(len).unwrap(),
         tx_buf: &[],
         rx_buf: &mut [],
@@ -161,7 +172,10 @@ pub fn nor_device_write_4b_data<'a>(len: usize) -> SpiNorCommand<'a> {
         mode: Jesd216Mode::Mode111,
         opcode: norflash::SPI_NOR_CMD_PP_4B,
         dummy_cycle: 0,
-         address: FlashAddress { value: 0x0, width: AddressWidth::FourByte },
+        address: FlashAddress {
+            value: 0x0,
+            width: AddressWidth::FourByte,
+        },
         data_len: u32::try_from(len).unwrap(),
         tx_buf: &[],
         rx_buf: &mut [],
@@ -214,8 +228,8 @@ pub fn device_info(dev_idx: DeviceId) -> (usize, usize, usize) {
 
 pub fn show_spi_regiters(uart: &mut UartController<'_>) {
     test_log!(uart, "SCU registers::");
-    astdebug::print_reg_u32(uart, SCU_BASE + 0x00, 0x40);
-     test_log!(uart, "FMC controller::");
+    astdebug::print_reg_u32(uart, SCU_BASE, 0x40);
+    test_log!(uart, "FMC controller::");
     astdebug::print_reg_u32(uart, FMC_CTRL_BASE, 0x40);
     test_log!(uart, "Spi0 controller::");
     astdebug::print_reg_u32(uart, SPI0_CTRL_BASE, 0x40);
@@ -407,7 +421,6 @@ pub fn test_spi(uart: &mut UartController<'_>) {
     let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
     let mut spi_uart_controller = UartController::new(uart_regs);
     spi_uart_controller.init(&UartConfig::default()).unwrap();
-
 
     let mut spi_controller = SpiController::new(
         spi0,
