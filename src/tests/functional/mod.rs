@@ -7,6 +7,7 @@ pub mod hmac_test;
 pub mod i2c_core_test;
 pub mod i2c_master_slave_test;
 pub mod i2c_test;
+pub mod i2cmonitor_test;
 pub mod rsa_test;
 pub mod rsa_test_vec;
 pub mod spim_test;
