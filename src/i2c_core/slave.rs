@@ -296,6 +296,59 @@ impl Ast1060I2c<'_> {
         }
     }
 
+    /// Pre-arm the TX buffer with a response before a [`SlaveEvent::ReadRequest`] completes.
+    ///
+    /// When `ReadRequest` fires the master is already clocking SCL. Calling
+    /// [`slave_write`](Self::slave_write) at that point is too late. This method
+    /// writes data to the hardware TX buffer and issues a single combined command
+    /// that arms **both** TX and RX buffers in one register write, so the master
+    /// sees valid data on the very next clock edge.
+    ///
+    /// Only meaningful in buffer-mode packet mode.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`I2cError::Invalid`] if `data` is empty or exceeds the 32-byte
+    /// hardware buffer limit.
+    pub fn pre_arm_tx(&mut self, data: &[u8]) -> Result<usize, I2cError> {
+        if data.is_empty() {
+            return Err(I2cError::Invalid);
+        }
+
+        let to_write = data.len().min(BUFFER_SIZE);
+        self.copy_to_buffer(&data[..to_write])?;
+
+        #[allow(clippy::cast_possible_truncation)]
+        self.regs()
+            .i2cc0c()
+            .write(|w| unsafe { w.tx_data_byte_count().bits(to_write as u8 - 1) });
+
+        // Arm TX and RX together in one write — master already clocking, no time to split.
+        let cmd = constants::AST_I2CS_ACTIVE_ALL
+            | constants::AST_I2CS_PKT_MODE_EN
+            | constants::AST_I2CS_TX_BUFF_EN
+            | constants::AST_I2CS_RX_BUFF_EN;
+        unsafe {
+            self.regs().i2cs28().write(|w| w.bits(cmd));
+        }
+
+        Ok(to_write)
+    }
+
+    /// Re-arm the slave RX buffer after a [`SlaveEvent::DataSent`] event.
+    ///
+    /// After `DataSent` fires the hardware disarms the RX buffer. Call this to
+    /// re-enable it so the slave can receive the master's next write, without
+    /// writing directly to the `i2cs28` PAC register.
+    pub fn rearm_rx(&mut self) {
+        let cmd = constants::AST_I2CS_ACTIVE_ALL
+            | constants::AST_I2CS_PKT_MODE_EN
+            | constants::AST_I2CS_RX_BUFF_EN;
+        unsafe {
+            self.regs().i2cs28().write(|w| w.bits(cmd));
+        }
+    }
+
     /// Handle slave mode interrupt
     #[allow(clippy::too_many_lines)]
     pub fn handle_slave_interrupt(&mut self) -> Option<SlaveEvent> {
