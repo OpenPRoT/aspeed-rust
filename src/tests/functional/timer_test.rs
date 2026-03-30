@@ -12,6 +12,7 @@ use embedded_io::Write;
 static mut UART_PTR: Option<&'static mut UartController<'static>> = None;
 static mut TIMER_INSTANCE: Option<TimerController<Timer>> = None;
 
+#[cfg(feature = "isr-handlers")]
 #[no_mangle]
 #[allow(static_mut_refs)]
 pub extern "C" fn timer() {

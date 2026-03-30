@@ -6,3 +6,6 @@
 # Bloat analysis reports
 target/bloat-reports/
 target/*-bloat-reports/
+
+# Auto-generated Bazel build file (regenerate via crate_universe)
+BUILD.bazel

@@ -17,7 +17,10 @@ edition = "2021"
 [features]
 default = []
 std = []
+isr-handlers = []  # Export ISR handlers with #[no_mangle] - disable for kernel integration
 i2c_target = []
+i3c_master = []
+i3c_target = []
 test-rsa = []
 test-ecdsa = []
 test-hmac = []
@@ -40,7 +43,6 @@ heapless = "0.8.0"
 nb = "1.1.0"
 paste = "1.0"
 static_cell = "2"
-
 openprot-hal-blocking = { git="https://github.com/OpenPRoT/openprot" }
 zerocopy = { version = "0.8.25", features = ["derive"] }
 critical-section = "1.2"
