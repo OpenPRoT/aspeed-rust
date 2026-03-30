@@ -2,126 +2,13 @@
 
 use ast1060_pac::Scu;
 use core::cmp::min;
-use core::fmt;
+
+use crate::spimonitor::{
+    AddrPriOp, AddrPrivRWSel, RegionInfo, SpiMonitor, SpiMonitorError, SpiMonitorNum,
+    SpimBlockMode, SpimExtMuxSel, SpimPassthroughMode, SpimSpiMaster, SpipfInstance,
+    BLOCK_REGION_NUM, MAX_CMD_INDEX, SPIM_CMD_TABLE_NUM,
+};
 use core::marker::PhantomData;
-//use core::ops::bit;
-//use embedded_hal::delay::DelayNs;
-
-#[derive(Debug)]
-#[repr(u8)]
-pub enum SpiMonitorNum {
-    SPIM0 = 0,
-    SPIM1 = 1,
-    SPIM2 = 2,
-    SPIM3 = 3,
-}
-
-//abstracts register base access for different instances
-pub trait SpipfInstance {
-    fn ptr() -> *const ast1060_pac::spipf::RegisterBlock;
-    const FILTER_ID: SpiMonitorNum;
-}
-
-macro_rules! macro_spif {
-    ($Spipfx: ident, $x: path) => {
-        impl SpipfInstance for ast1060_pac::$Spipfx {
-            fn ptr() -> *const ast1060_pac::spipf::RegisterBlock {
-                ast1060_pac::$Spipfx::ptr()
-            }
-            const FILTER_ID: SpiMonitorNum = $x;
-        }
-    };
-}
-macro_spif!(Spipf, SpiMonitorNum::SPIM0);
-macro_spif!(Spipf1, SpiMonitorNum::SPIM1);
-macro_spif!(Spipf2, SpiMonitorNum::SPIM2);
-macro_spif!(Spipf3, SpiMonitorNum::SPIM3);
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum SpimSpiMaster {
-    SPI1 = 0,
-    SPI2 = 1,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum SpimPassthroughMode {
-    SinglePassthrough = 0,
-    MultiPassthrough = 1,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum SpimExtMuxSel {
-    SpimExtMuxSel0 = 0,
-    SpimExtMuxSel1 = 1,
-}
-impl SpimExtMuxSel {
-    #[must_use]
-    pub fn to_bool(self) -> bool {
-        self as u8 != 0
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum SpimBlockMode {
-    SpimDeassertCsEearly = 0,
-    SpimBlockExtraClk = 1,
-}
-
-//address privilege table control
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum AddrPrivRWSel {
-    AddrPrivReadSel,
-    AddrPrivWriteSel,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum AddrPriOp {
-    FlagAddrPrivEnable,
-    FlagAddrPrivDisable,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum SpiMonitorError {
-    CommandNotFound(u8),
-    NoAllowCmdSlotAvail(u32),
-    InvalidCmdSlotIndex(u32),
-    AllowCmdSlotLocked(u32),
-    AllowCmdSlotInvalid(u32),
-    AddressInvalid(u32),
-    LengthInvalid(u32),
-    AddrTblRegsLocked(u32),
-}
-//Allow command table information
-pub const SPIM_CMD_TABLE_NUM: usize = 32;
-pub const MAX_CMD_INDEX: usize = 31;
-pub const BLOCK_REGION_NUM: usize = 32;
-//generic type
-pub struct SpiMonitor<SPIPF: SpipfInstance> {
-    pub spi_monitor: &'static ast1060_pac::spipf::RegisterBlock,
-    pub scu: &'static ast1060_pac::scu::RegisterBlock,
-    pub extra_clk_en: bool,
-    pub force_rel_flash_rst: bool,
-    pub ext_mux_sel: SpimExtMuxSel,
-    pub allow_cmd_list: [u8; SPIM_CMD_TABLE_NUM],
-    pub allow_cmd_num: u8,
-    pub read_blocked_regions: [RegionInfo; BLOCK_REGION_NUM],
-    pub read_blocked_region_num: u8,
-    pub write_blocked_regions: [RegionInfo; BLOCK_REGION_NUM],
-    pub write_blocked_region_num: u8,
-    _marker: PhantomData<SPIPF>,
-}
-
-impl<SPIPF: SpipfInstance> fmt::Debug for SpiMonitor<SPIPF> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("SpiMonitor")
-    }
-}
 
 //Address table selection majic value
 pub const SEL_READ_TBL_MAJIC: u32 = 0x52 << 24;
@@ -208,12 +95,6 @@ pub struct CmdTableInfo {
     cmd_table_val: u32,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct RegionInfo {
-    pub start: u32,
-    pub length: u32,
-}
-
 //#[derive(Debug, Clone, Copy)]
 //pub struct GpioInfo {
 
@@ -245,7 +126,7 @@ pub const fn cmd_table_value(
         | cmd
 }
 
-pub fn spim_get_cmd_table_val(cmd: u8) -> Result<u32, SpiMonitorError> {
+fn spim_get_cmd_table_val(cmd: u8) -> Result<u32, SpiMonitorError> {
     for entry in CMDS_ARRAY {
         if entry.cmd == cmd {
             return Ok(entry.cmd_table_val);
@@ -482,25 +363,13 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
             _marker: PhantomData,
         }
     }
-    pub fn spim_scu_ctrl_set(&mut self, mask: u32, val: u32) {
-        let mut reg_val = self.scu.scu0f0().read().bits();
-        reg_val &= !mask;
-        reg_val |= val;
-        self.scu.scu0f0().write(|w| unsafe { w.bits(reg_val) });
-    }
-
-    pub fn spim_scu_ctrl_clear(&mut self, clear_bits: u32) {
-        let mut reg_val = self.scu.scu0f0().read().bits();
-        reg_val &= !clear_bits;
-        self.scu.scu0f0().write(|w| unsafe { w.bits(reg_val) });
-    }
 
     //SPI_M1: GPIOA6, SCU610[6], SPI master CS output
     //SPI_M2: GPIOC4, SCU610[20]
     //SPI_M3: GPIOE2, SCU614[2] (dummy, cannot be disabled)
     //SPI_M4: GPIOG0, SCU614[16]
     //disable chip select internal pull down
-    pub fn spim_disable_cs_internal_pd(&mut self) {
+    pub(crate) fn spim_disable_cs_internal_pd(&mut self) {
         //SPIPF::FILTER_ID
         match SPIPF::FILTER_ID {
             SpiMonitorNum::SPIM0 => {
@@ -522,7 +391,8 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
         }
     }
     //Enable MISO
-    pub fn spim_miso_multi_func_adjust(&mut self, enable: bool) {
+    #[allow(dead_code)]
+    pub(crate) fn spim_miso_multi_func_adjust(&mut self, enable: bool) {
         match SPIPF::FILTER_ID {
             SpiMonitorNum::SPIM0 => {
                 self.scu
@@ -548,7 +418,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
     }
 
     //enable/disable pass through
-    pub fn spim_scu_passthrough_mode(&mut self, passthrough_en: bool) {
+    pub(crate) fn spim_scu_passthrough_mode(&mut self, passthrough_en: bool) {
         self.scu.scu0f0().modify(|_, w| match SPIPF::FILTER_ID {
             SpiMonitorNum::SPIM0 => w.enbl_passthrough_of_spipf1().bit(passthrough_en),
             SpiMonitorNum::SPIM1 => w.enbl_passthrough_of_spipf2().bit(passthrough_en),
@@ -558,7 +428,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
     }
 
     //set passthrough mode
-    pub fn spim_passthrough_mode_set(&mut self, mode: SpimPassthroughMode) {
+    pub(crate) fn spim_passthrough_mode_set(&mut self, mode: SpimPassthroughMode) {
         match mode {
             SpimPassthroughMode::SinglePassthrough => {
                 self.spi_monitor
@@ -578,7 +448,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
 
     //Internal SPI master selection
     //Select internal SPI master connection
-    pub fn spim_spi_ctrl_detour_enable(&mut self, spi_master: SpimSpiMaster, enable: bool) {
+    pub(crate) fn spim_spi_ctrl_detour_enable(&mut self, spi_master: SpimSpiMaster, enable: bool) {
         if enable {
             self.scu.scu0f0().modify(|_, w| unsafe {
                 w.select_int_spimaster_connection()
@@ -592,11 +462,18 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
                 .scu0f0()
                 .modify(|_, w| w.int_spimaster_sel().bit(bit_val));
         } else {
-            self.spim_scu_ctrl_clear(0xF);
+            //self.spim_scu_ctrl_clear(0xF);
+            let mut reg_val = self.scu.scu0f0().read().bits();
+            reg_val &= !0xF;
+            self.scu.scu0f0().write(|w| unsafe { w.bits(reg_val) });
         }
     }
 
-    pub fn spim_passthrough_config(&mut self, passthrough_en: bool, mode: SpimPassthroughMode) {
+    pub(crate) fn spim_passthrough_config(
+        &mut self,
+        passthrough_en: bool,
+        mode: SpimPassthroughMode,
+    ) {
         // self.spim_scu_passthrough_enable(passthrough_en);
         if passthrough_en {
             self.spim_passthrough_mode_set(mode);
@@ -610,7 +487,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
         }
     }
     //External Mux Selection Signal
-    pub fn spim_ext_mux_config(&mut self, mux_sel: SpimExtMuxSel) {
+    pub(crate) fn spim_ext_mux_config(&mut self, mux_sel: SpimExtMuxSel) {
         assert!(mux_sel as u32 <= SpimExtMuxSel::SpimExtMuxSel1 as u32);
         let bit_val = mux_sel.to_bool();
         match SPIPF::FILTER_ID {
@@ -639,7 +516,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
     //
     //Block Mode: Block a command by one extra CLK
     //Block a command by deasserting CS early
-    pub fn spim_block_mode_config(&mut self, block_mode: SpimBlockMode) {
+    pub(crate) fn spim_block_mode_config(&mut self, block_mode: SpimBlockMode) {
         if block_mode == SpimBlockMode::SpimBlockExtraClk {
             self.spi_monitor
                 .spipf000()
@@ -651,7 +528,11 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
         }
     }
 
-    pub fn spim_write_fixed_loc_in_allow_cmd_table(&mut self, cmd: u8, reg_val: u32) -> usize {
+    pub(crate) fn spim_write_fixed_loc_in_allow_cmd_table(
+        &mut self,
+        cmd: u8,
+        reg_val: u32,
+    ) -> usize {
         match cmd {
             CMD_EN4B => {
                 self.spi_monitor
@@ -676,7 +557,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
     }
     //init allow commands table registers
     //0, 1 and 31 are reserved for the particular commands
-    pub fn spim_allow_cmd_table_init(&mut self, cmd_list: &[u8], cmd_num: u8, flag: u32) {
+    pub(crate) fn spim_allow_cmd_table_init(&mut self, cmd_list: &[u8], cmd_num: u8, flag: u32) {
         let mut index = 1;
         let list_size = min(cmd_num as usize, cmd_list.len());
         for &cmd in cmd_list.iter().take(list_size) {
@@ -707,7 +588,8 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
         }
     }
 
-    pub fn spim_get_empty_allow_cmd_slot(&mut self) -> Result<u32, SpiMonitorError> {
+    #[allow(dead_code)]
+    pub(crate) fn spim_get_empty_allow_cmd_slot(&mut self) -> Result<u32, SpiMonitorError> {
         for index in 2..SPIM_CMD_TABLE_NUM {
             let reg_val = self.spi_monitor.spipfwt(index).read().bits();
             if reg_val == 0 {
@@ -719,7 +601,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
         ))
     }
 
-    pub fn spim_get_allow_cmd_slot(
+    pub(crate) fn spim_get_allow_cmd_slot(
         &mut self,
         cmd: u8,
         start_offset: u32,
@@ -738,7 +620,12 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
         Err(SpiMonitorError::CommandNotFound(cmd))
     }
 
-    pub fn spim_add_new_command(&mut self, cmd: u8, flag: u32) -> Result<u32, SpiMonitorError> {
+    #[allow(dead_code)]
+    pub(crate) fn spim_add_new_command(
+        &mut self,
+        cmd: u8,
+        flag: u32,
+    ) -> Result<u32, SpiMonitorError> {
         // Retrieve the command table value
         let Ok(mut reg_val) = spim_get_cmd_table_val(cmd) else {
             return Err(SpiMonitorError::CommandNotFound(cmd));
@@ -772,7 +659,12 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
     //  If the command doesn't exist in allow command table, an
     //   empty slot will be found and the command info will be
     //   filled into.
-    pub fn spim_add_allow_command(&mut self, cmd: u8, flag: u32) -> Result<u32, SpiMonitorError> {
+    #[allow(dead_code)]
+    pub(crate) fn spim_add_allow_command(
+        &mut self,
+        cmd: u8,
+        flag: u32,
+    ) -> Result<u32, SpiMonitorError> {
         //check if the command is already in allow command Table
         let mut offset: u32 = 0;
 
@@ -808,7 +700,8 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
     }
     //All command table slots where command is equal to "cmd", valid and not locked
     //will be removed
-    pub fn spim_remove_allow_command(&mut self, cmd: u8) -> Result<u32, SpiMonitorError> {
+    #[allow(dead_code)]
+    pub(crate) fn spim_remove_allow_command(&mut self, cmd: u8) -> Result<u32, SpiMonitorError> {
         //check if the command is already in allow command Table
         let mut offset: u32 = 0;
         let mut count: u32 = 0;
@@ -846,7 +739,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
     //- All command table slot which command is equal to "cmd"
     //  parameter will be locked.
     //
-    pub fn spim_lock_allow_command_table(
+    pub(crate) fn spim_lock_allow_command_table(
         &mut self,
         cmd: u8,
         flag: u32,
@@ -887,7 +780,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
             Ok(count)
         }
     }
-    pub fn spim_is_pri_regs_locked(&mut self, rw_select: AddrPrivRWSel) -> bool {
+    pub(crate) fn spim_is_pri_regs_locked(&mut self, rw_select: AddrPrivRWSel) -> bool {
         match rw_select {
             AddrPrivRWSel::AddrPrivWriteSel => {
                 if self.spi_monitor.spipf07c().read().wr_dis_of_spipfwa().bit() {
@@ -902,7 +795,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
         }
         false
     }
-    pub fn spim_addr_priv_access_enable(&mut self, priv_sel: AddrPrivRWSel) {
+    pub(crate) fn spim_addr_priv_access_enable(&mut self, priv_sel: AddrPrivRWSel) {
         let mut reg_val = self.spi_monitor.spipf000().read().bits();
         //mask out the upper 8 bits
         reg_val &= 0x00FF_FFFF;
@@ -917,7 +810,8 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
     }
 
     //get aligned length
-    pub fn spim_get_adjusted_addr_len(&mut self, addr: u32, len: u32) -> (u32, u32) {
+    #[allow(clippy::unused_self)]
+    pub(crate) fn spim_get_adjusted_addr_len(&mut self, addr: u32, len: u32) -> (u32, u32) {
         if len == 0 {
             return (addr, 0);
         }
@@ -935,12 +829,13 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
     //Each bit defines permission of one 16KB block
     //Calculate numbers of 16KB blocks
     //Start address may cross two different 16KB blocks
-    pub fn spim_get_total_block_num(&mut self, addr: u32, len: u32) -> u32 {
+    #[allow(dead_code)]
+    pub(crate) fn spim_get_total_block_num(&mut self, addr: u32, len: u32) -> u32 {
         let (_aligned_addr, adjusted_len) = self.spim_get_adjusted_addr_len(addr, len);
         adjusted_len / ACCESS_BLOCK_UNIT
     }
 
-    pub fn spim_address_privilege_config(
+    pub(crate) fn spim_address_privilege_config(
         &mut self,
         rw_select: AddrPrivRWSel,
         priv_op: AddrPriOp,
@@ -1007,7 +902,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
         Ok(total_blocks)
     }
     //lock all SPIPFWA/RA for writing
-    pub fn spim_lock_rw_priv_table(&mut self, rw_select: AddrPrivRWSel) {
+    pub(crate) fn spim_lock_rw_priv_table(&mut self, rw_select: AddrPrivRWSel) {
         if rw_select == AddrPrivRWSel::AddrPrivWriteSel {
             self.spi_monitor
                 .spipf07c()
@@ -1020,7 +915,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
         }
     }
     //
-    pub fn spim_lock_common(&mut self) {
+    pub(crate) fn spim_lock_common(&mut self) {
         self.spim_lock_rw_priv_table(AddrPrivRWSel::AddrPrivReadSel);
         self.spim_lock_rw_priv_table(AddrPrivRWSel::AddrPrivWriteSel);
         let _ = self.spim_lock_allow_command_table(0, FLAG_CMD_TABLE_LOCK_ALL);
@@ -1043,7 +938,8 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
                 .bit(true)
         });
     }
-    pub fn spim_set_read_blocked_regions(
+    #[allow(dead_code)]
+    pub(crate) fn spim_set_read_blocked_regions(
         &mut self,
         read_blocked_regions: &[RegionInfo],
         read_blocked_region_num: u8,
@@ -1053,7 +949,8 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
         self.read_blocked_region_num = read_blocked_region_num;
     }
 
-    pub fn spim_set_write_blocked_regions(
+    #[allow(dead_code)]
+    pub(crate) fn spim_set_write_blocked_regions(
         &mut self,
         write_blocked_regions: &[RegionInfo],
         write_blocked_region_num: u8,
@@ -1064,17 +961,19 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
     }
 
     // supported command list
-    pub fn spim_set_cmd_table(&mut self, allow_cmd_list: &[u8], allow_cmd_num: u8) {
+    #[allow(dead_code)]
+    pub(crate) fn spim_set_cmd_table(&mut self, allow_cmd_list: &[u8], allow_cmd_num: u8) {
         self.allow_cmd_list[..allow_cmd_num as usize]
             .copy_from_slice(&allow_cmd_list[..allow_cmd_num as usize]);
         self.allow_cmd_num = allow_cmd_num;
     }
-
-    pub fn spim_dump_read_blocked_regions(&mut self) {}
-    pub fn spim_dump_write_blocked_regions(&mut self) {}
+    #[allow(clippy::unused_self, dead_code)]
+    pub(crate) fn spim_dump_read_blocked_regions(&mut self) {}
+    #[allow(clippy::unused_self, dead_code)]
+    pub(crate) fn spim_dump_write_blocked_regions(&mut self) {}
 
     //Block read and write to regions
-    pub fn spim_rw_perm_init(&mut self) {
+    pub(crate) fn spim_rw_perm_init(&mut self) {
         //Enable previliege control for 256MB area
         let _ = self.spim_address_privilege_config(
             AddrPrivRWSel::AddrPrivReadSel,
@@ -1108,7 +1007,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
         }
     }
     //Enable/disable SPI monitor from SCU
-    pub fn spim_scu_monitor_config(&mut self, enable: bool) {
+    pub(crate) fn spim_scu_monitor_config(&mut self, enable: bool) {
         match SPIPF::FILTER_ID {
             SpiMonitorNum::SPIM0 => {
                 self.scu
@@ -1133,20 +1032,20 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
         }
     }
     //Enable/disable SPI monitor/filter function
-    pub fn spim_ctrl_monitor_config(&mut self, enable: bool) {
+    pub(crate) fn spim_ctrl_monitor_config(&mut self, enable: bool) {
         self.spi_monitor
             .spipf000()
             .modify(|_, w| w.enbl_filter_fn().bit(enable));
     }
 
-    pub fn spim_monitor_enable(&mut self, enable: bool) {
+    pub(crate) fn spim_enable(&mut self, enable: bool) {
         self.spim_ctrl_monitor_config(enable);
         // self.spim_miso_multi_func_adjust(enable);
         self.spim_passthrough_config(enable, SpimPassthroughMode::SinglePassthrough);
     }
 
     //Use SCU0F0 to enable flash rst
-    pub fn spim_release_flash_rst(&mut self) {
+    pub(crate) fn spim_release_flash_rst(&mut self) {
         //SCU0F0[23:20]: Reset source selection
         //SCU0F0[27:24]: Enable reset signal output
         match SPIPF::FILTER_ID {
@@ -1212,7 +1111,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
     }
 
     //Enable push pull mode
-    pub fn spim_push_pull_mode_config(&mut self) {
+    pub(crate) fn spim_push_pull_mode_config(&mut self) {
         self.spi_monitor
             .spipf004()
             .modify(|_, w| w.enbl_push_pull_mode().bit(true));
@@ -1223,7 +1122,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
         self.spim_scu_monitor_config(true);
     }
 
-    pub fn spim_irq_enable(&mut self) {
+    pub(crate) fn spim_irq_enable(&mut self) {
         self.spi_monitor.spipf004().modify(|_, w| {
             w.enbl_intof_cmd_block()
                 .bit(true)
@@ -1233,8 +1132,9 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
                 .bit(true)
         });
     }
-    pub fn spim_abnormal_log_init(&mut self) {}
-    pub fn spim_sw_rst(&mut self) {
+    #[allow(clippy::unused_self, dead_code)]
+    pub(crate) fn spim_abnormal_log_init(&mut self) {}
+    pub(crate) fn spim_sw_rst(&mut self) {
         self.spi_monitor
             .spipf000()
             .modify(|_, w| w.sweng_rst().bit(true));
@@ -1250,7 +1150,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
     //SCU410, SCU414[27:0], SCU4B4  must keep at value 0x0
     //SPIM0 pin ctrl
     //SCU410/4B0/690[13:0], rstin: SCU414/4B4/694[24]
-    pub fn spim_enbl_spim0_pin_ctrl(&mut self) {
+    pub(crate) fn spim_enbl_spim0_pin_ctrl(&mut self) {
         // Clear SCU4B0[13:0]
         let mut reg_val = self.scu.scu4b0().read().bits();
         reg_val &= !0x3FFF;
@@ -1267,7 +1167,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
     //SCU410, SCU41C[7:0], SCU4B4, 4BC[24:0] must keep at value 0x0
     //SPIM1 pin ctrl
     //SCU410/4B0/690[27:14], rstin:41C/4BC/69C[9]
-    pub fn spim_enbl_spim1_pin_ctrl(&mut self) {
+    pub(crate) fn spim_enbl_spim1_pin_ctrl(&mut self) {
         // Clear SCU4B0[14:27]
         let mut reg_val = self.scu.scu4b0().read().bits();
         reg_val &= !(0x3FFF << 14);
@@ -1290,7 +1190,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
     //SPIM2 pin ctrl
     //SCU410/4B0/690[31:28], SCU414/4B4/694[9:0]
     //rstin SCU414/4B4/694[25]
-    pub fn spim_enbl_spim2_pin_ctrl(&mut self) {
+    pub(crate) fn spim_enbl_spim2_pin_ctrl(&mut self) {
         //Clear SCU4B0[31:28]
         let mut reg_val = self.scu.scu4b0().read().bits();
         reg_val &= !(0xF << 28);
@@ -1310,7 +1210,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
     }
     //SCU410, SCU41C[7:0], SCU4B4, 4BC[24:0] must keep at value 0x0
     //SCU414/4B4/694[23:10]:SPIM3 pin ctrl rstin,41C/4BC/69C[11]
-    pub fn spim_enbl_spim3_pin_ctrl(&mut self) {
+    pub(crate) fn spim_enbl_spim3_pin_ctrl(&mut self) {
         //Set SCU694[23:10]
         let mut reg_val = self.scu.scu694().read().bits();
         reg_val |= 0x3FFF << 10;
@@ -1323,7 +1223,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
             .modify(|_, w| w.enbl_qspimonitor4rstin_fn_pin().bit(true));
     }
     //SCU410,SCU414[27:0],SCU41C[7:0],SCU4B4,4BC[24:0], must be kept as 0x0
-    pub fn spim_pin_ctrl_config(&mut self) {
+    pub(crate) fn spim_pin_ctrl_config(&mut self) {
         match SPIPF::FILTER_ID {
             SpiMonitorNum::SPIM0 => {
                 self.spim_enbl_spim0_pin_ctrl();
@@ -1339,7 +1239,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
             }
         }
     }
-    pub fn aspeed_spi_monitor_init(&mut self) {
+    pub(crate) fn aspeed_spi_monitor_init(&mut self) {
         let allow_cmd_list = self.allow_cmd_list;
         let allow_cmd_num = self.allow_cmd_num;
 
@@ -1357,7 +1257,7 @@ impl<SPIPF: SpipfInstance> SpiMonitor<SPIPF> {
         }
         self.spim_allow_cmd_table_init(&allow_cmd_list, allow_cmd_num, 0);
         self.spim_rw_perm_init();
-        self.spim_monitor_enable(true);
+        self.spim_enable(true);
 
         //log info init
         //self.spim_abnormal_log_init();

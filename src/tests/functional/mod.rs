@@ -10,4 +10,5 @@ pub mod i2c_test;
 pub mod i3c_test;
 pub mod rsa_test;
 pub mod rsa_test_vec;
+pub mod spim_test;
 pub mod timer_test;

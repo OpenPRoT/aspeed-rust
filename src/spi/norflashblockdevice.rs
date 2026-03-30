@@ -172,12 +172,12 @@ where
                 self.device
                     .nor_page_program(u32::try_from(write_addr).unwrap(), chunk)
             };
-
+            self.device.nor_wait_until_ready();
+            delay.delay_ns(2_000_000);
             if result.is_err() {
                 return Err(BlockError::ProgramError);
             }
             offset += program_block;
-            delay.delay_ns(2_000_000);
         }
 
         Ok(())
