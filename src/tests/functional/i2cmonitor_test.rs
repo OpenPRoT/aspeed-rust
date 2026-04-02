@@ -3,7 +3,7 @@
 use crate::common::{DummyDelay, UartLogger};
 use crate::i2cmonitor::I2cMonitor;
 use crate::pinctrl;
-use crate::uart::UartController;
+use crate::uart_core::UartController;
 use ast1060_pac::{I2cFilterThr, I2cFilterThr1, I2cFilterThr2, I2cFilterThr3, I2cfilter, Peripherals, Scu};
 use embedded_hal::delay::DelayNs;
 use embedded_io::Write;
@@ -65,8 +65,8 @@ pub fn test_i2cmonitor(uart: &mut UartController<'_>) {
 
     let peripherals = unsafe { Peripherals::steal() };
     let mut delay = DummyDelay {};
-    let mut delay2 = DummyDelay {};
-    let mut dbg_uart = UartController::new(peripherals.uart, &mut delay2);
+    let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
+    let mut dbg_uart = UartController::new(uart_regs);
     let mut i2c_monitor = I2cMonitor::new(
         peripherals.i2cfilter,
         peripherals.i2c_filter_thr,
