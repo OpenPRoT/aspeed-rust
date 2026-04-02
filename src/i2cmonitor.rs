@@ -392,20 +392,21 @@ impl<L: Logger> I2cMonitor<L> {
             .i2cfilterthr08()
             .write(|w| unsafe { w.addr().bits(0) });
 
-        let tbl_addr: u32 = thr.i2cfilterthr08().read().bits();
-        let tbl_ptr = tbl_addr as *mut AstI2cFMTbl;
+        // let tbl_addr: u32 = thr.i2cfilterthr08().read().bits();
+        // let tbl_ptr = tbl_addr as *mut AstI2cFMTbl;
+        let tbl_ptr = &mut unsafe { I2C_FILTER_TBL }[index];
         //clear bitmap table
-        unsafe {
+        // unsafe {
             //make sure the address is valid and points to a properly aligned AstI2cFMTbl
-            if !tbl_ptr.is_null() {
+            // if !tbl_ptr.is_null() {
                 let tbl_ref: &mut AstI2cFMTbl = &mut *tbl_ptr;
                 for bitmap in &mut tbl_ref.filter_mtbl {
                     for elem in &mut bitmap.element {
                         *elem = 0;
                     }
                 }
-            }
-        }
+            // }
+        // }
     }
     //
     pub fn ast_i2c_filter_default(
