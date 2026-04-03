@@ -8,8 +8,7 @@ use ast1060_pac::{I2cFilterThr, I2cFilterThr1, I2cFilterThr2, I2cFilterThr3, I2c
 use embedded_hal::delay::DelayNs;
 use embedded_io::Write;
 
-pub fn test_i2cmonitor(uart: &mut UartController<'_>) {
-    /*  example filter bitmap
+/*  example filter bitmap
 
     let data_flt: [AstI2cFBitmap; 6] = [
         // block all (index 0)
@@ -63,6 +62,7 @@ pub fn test_i2cmonitor(uart: &mut UartController<'_>) {
         },
     ];*/
 
+pub fn test_i2cmonitor(uart: &mut UartController<'_>) {
     let peripherals = unsafe { Peripherals::steal() };
     let mut delay = DummyDelay {};
     let uart_regs = unsafe { &*ast1060_pac::Uart::ptr() };
