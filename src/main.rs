@@ -24,6 +24,7 @@ use aspeed_ddk::tests::functional::hmac_test::run_hmac_tests;
 use aspeed_ddk::tests::functional::i2c_core_test::run_i2c_core_tests;
 use aspeed_ddk::tests::functional::i2c_master_slave_test::run_master_slave_tests;
 use aspeed_ddk::tests::functional::i2c_test;
+use aspeed_ddk::tests::functional::i2cmonitor_test;
 #[cfg(any(feature = "i3c_master", feature = "i3c_target"))]
 use aspeed_ddk::tests::functional::i3c_test;
 use aspeed_ddk::tests::functional::rsa_test::run_rsa_tests;
@@ -406,6 +407,19 @@ fn main() -> ! {
 
     // Run I2C master-slave hardware integration tests
     run_master_slave_tests(&mut uart_controller);
+
+    // test with AST1060-AST2600 DC-SCM board
+    if false {
+        {
+            // use to release ast2600
+            spim_test::test_spim0(&mut uart_controller);
+            gpio_test::test_gpio_flash_power(&mut uart_controller);
+            gpio_test::test_gpio_bmc_reset(&mut uart_controller);
+        }
+
+        // set up i2c_filter test
+        i2cmonitor_test::test_i2cmonitor(&mut uart_controller);
+    }
 
     test_wdt(&mut uart_controller);
     run_timer_tests(&mut uart_controller);

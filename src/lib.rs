@@ -11,6 +11,7 @@ pub mod hash_owned;
 pub mod hmac;
 pub mod i2c;
 pub mod i2c_core;
+pub mod i2cmonitor;
 pub mod i3c;
 pub mod pinctrl;
 pub mod rsa;
