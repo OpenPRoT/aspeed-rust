@@ -235,7 +235,7 @@ static mut TEST_TARGET: DummyI2CTarget = DummyI2CTarget {
 pub fn test_i2c_slave(uart: &mut UartController<'_>) {
     writeln!(uart, "\r\n####### I2C slave test #######\r\n").unwrap();
 
-    let peripherals = unsafe { Peripherals::steal() };
+    let _peripherals = unsafe { Peripherals::steal() };
     unsafe {
         let uart_regs = &*ast1060_pac::Uart::ptr();
         let mut dbg_uart = UartController::new(uart_regs);

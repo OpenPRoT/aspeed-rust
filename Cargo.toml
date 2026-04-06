@@ -18,6 +18,7 @@ edition = "2021"
 default = []
 std = []
 isr-handlers = []  # Export ISR handlers with #[no_mangle] - disable for kernel integration
+i2c_master = []
 i2c_target = []
 i3c_master = []
 i3c_target = []

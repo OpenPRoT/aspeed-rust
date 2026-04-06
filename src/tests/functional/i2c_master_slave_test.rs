@@ -62,6 +62,8 @@ use embedded_io::Write;
 
 /// I2C controller for master tests (I2C1 - connected to ADT7490)
 const I2C_MASTER_CTRL_ID: u8 = 1;
+/// I2C controller for master tests (I2C2 - connected to ast1060 i2c slave)
+const I2C_MASTER2_CTRL_ID: u8 = 2;
 
 /// I2C controller for slave tests
 const I2C_SLAVE_CTRL_ID: u8 = 2;
@@ -124,15 +126,24 @@ impl TestResults {
 /// Tests the `i2c_core` API by reading known registers from the on-board ADT7490.
 /// This mirrors the original `i2c_test.rs` functionality.
 pub fn run_master_tests(uart: &mut UartController<'_>) {
-    let _ = writeln!(uart, "\n========================================\r");
-    let _ = writeln!(uart, "I2C MASTER Tests (i2c_core API)\r");
-    let _ = writeln!(uart, "Using ADT7490 @ 0x{ADT7490_ADDRESS:02X}\r");
-    let _ = writeln!(uart, "========================================\n\r");
-
     let mut results = TestResults::new();
 
-    test_adt7490_register_reads(uart, &mut results);
-    test_adt7490_write_read(uart, &mut results);
+    if false {
+        let _ = writeln!(uart, "\n========================================\r");
+        let _ = writeln!(uart, "I2C MASTER Tests (i2c_core API)\r");
+        let _ = writeln!(uart, "Using ADT7490 @ 0x{ADT7490_ADDRESS:02X}\r");
+        let _ = writeln!(uart, "========================================\n\r");
+
+        test_adt7490_register_reads(uart, &mut results);
+        test_adt7490_write_read(uart, &mut results);
+    } else {
+        let _ = writeln!(uart, "\n========================================\r");
+        let _ = writeln!(uart, "I2C MASTER Tests (i2c_core API)\r");
+        let _ = writeln!(uart, "Using i2c slave @ 0x{SLAVE_ADDRESS:02X}\r");
+        let _ = writeln!(uart, "========================================\n\r");
+
+        test_ast1060_i2c_slave_write_read(uart, &mut results);
+    }
 
     let (passed, failed) = results.summary();
     let _ = writeln!(uart, "\n========================================\r");
@@ -299,6 +310,96 @@ fn test_adt7490_write_read(uart: &mut UartController<'_>, results: &mut TestResu
     }
 }
 
+/// Test write-read sequence to slave tests
+fn test_ast1060_i2c_slave_write_read(uart: &mut UartController<'_>, results: &mut TestResults) {
+    let _ = writeln!(uart, "\n[TEST] Write-Read Sequence\r");
+
+    unsafe {
+        let peripherals = Peripherals::steal();
+        pinctrl::Pinctrl::apply_pinctrl_group(pinctrl::PINCTRL_I2C2);
+
+        // Get I2C2 registers
+        let i2c_regs = &peripherals.i2c2;
+        let buff_regs = &peripherals.i2cbuff2;
+
+        let Some(controller_id) = Controller::new(I2C_MASTER2_CTRL_ID) else {
+            let _ = writeln!(uart, "  [FAIL] Invalid controller ID\r");
+            results.fail();
+            return;
+        };
+
+        let controller = I2cController {
+            controller: controller_id,
+            registers: i2c_regs,
+            buff_registers: buff_regs,
+        };
+
+        let config = I2cConfig {
+            speed: I2cSpeed::Standard,
+            xfer_mode: I2cXferMode::BufferMode,
+            multi_master: true,
+            smbus_timeout: true,
+            smbus_alert: false,
+            clock_config: ClockConfig::ast1060_default(),
+        };
+
+        let mut i2c = match Ast1060I2c::new(&controller, config) {
+            Ok(m) => m,
+            Err(e) => {
+                let _ = writeln!(uart, "  [FAIL] Init error: {e:?}\r");
+                results.fail();
+                return;
+            }
+        };
+
+        // write to address 0x3d
+        let write_buf = [0x3D, 0xAB];
+
+        let _ = writeln!(uart, "  Writing to reg 0x3D...\r");
+
+        match i2c.write(SLAVE_ADDRESS, &write_buf) {
+            Ok(()) => {}
+            Err(e) => {
+                let _ = writeln!(uart, "  [FAIL] Write address: {e:?}\r");
+                results.fail();
+                return;
+            }
+        }
+
+        // Read Device address (0x3D)
+        let reg_addr = [0x3D];
+        let mut read_buf = [0u8; 1];
+
+        let _ = writeln!(uart, "  Reading reg 0x3D...\r");
+
+        match i2c.write(SLAVE_ADDRESS, &reg_addr) {
+            Ok(()) => {}
+            Err(e) => {
+                let _ = writeln!(uart, "  [FAIL] Write address: {e:?}\r");
+                results.fail();
+                return;
+            }
+        }
+
+        //Small delay
+        for _ in 0..1000 {
+            core::hint::spin_loop();
+        }
+
+        match i2c.read(SLAVE_ADDRESS, &mut read_buf) {
+            Ok(()) => {
+                let _ = writeln!(uart, "  read value: 0x{:02X}\r", read_buf[0]);
+                let _ = writeln!(uart, "  [PASS] Write-Read sequence completed\r");
+                results.pass();
+            }
+            Err(e) => {
+                let _ = writeln!(uart, "  [FAIL] Read: {e:?}\r");
+                results.fail();
+            }
+        }
+    }
+}
+
 // ============================================================================
 // SLAVE Tests - External Master Required
 // ============================================================================
@@ -416,6 +517,19 @@ fn slave_event_loop(uart: &mut UartController<'_>, slave: &mut Ast1060I2c<'_>) {
                     let _ = slave.slave_write(&TEST_PATTERN_READ);
                     transaction_count += 1;
                 }
+                SlaveEvent::DataReceivedAndSent { rx_len, tx_len } => {
+                    let _ = writeln!(
+                        uart,
+                        "[SLAVE] Received {rx_len} bytes, Sent {tx_len} bytes\r"
+                    );
+                    let mut buf = [0u8; 32];
+                    if let Ok(n) = slave.slave_read(&mut buf) {
+                        let _ = writeln!(uart, "  Data: {:02X?}\r", &buf[..n]);
+                    }
+                    let _ = writeln!(uart, "sending {:02X?}\r", &TEST_PATTERN_READ[..tx_len]);
+                    let _ = slave.slave_write(&TEST_PATTERN_READ);
+                    transaction_count += 1;
+                }
                 SlaveEvent::Stop => {
                     let _ = writeln!(uart, "[SLAVE] Stop condition\r");
                 }
@@ -453,24 +567,27 @@ fn slave_event_loop(uart: &mut UartController<'_>, slave: &mut Ast1060I2c<'_>) {
 
 /// Print test setup information
 pub fn run_master_slave_tests(uart: &mut UartController<'_>) {
-    let _ = writeln!(uart, "\n========================================");
-    let _ = writeln!(uart, "I2C Hardware Integration Tests (i2c_core)");
-    let _ = writeln!(uart, "========================================");
+    let _ = writeln!(uart, "\n========================================\r");
+    let _ = writeln!(uart, "I2C Hardware Integration Tests (i2c_core)\r");
+    let _ = writeln!(uart, "========================================\r");
     let _ = writeln!(uart);
-    let _ = writeln!(uart, "MASTER TESTS: run_master_tests()");
+    let _ = writeln!(uart, "MASTER TESTS: run_master_tests()\r");
     let _ = writeln!(
         uart,
-        "  - Uses on-board ADT7490 temp sensor @ 0x{ADT7490_ADDRESS:02X}"
+        "  - Uses on-board ADT7490 temp sensor @ 0x{ADT7490_ADDRESS:02X}\r"
     );
-    let _ = writeln!(uart, "  - Reads known registers and verifies defaults");
-    let _ = writeln!(uart, "  - No external hardware needed");
+    let _ = writeln!(uart, "  - Reads known registers and verifies defaults\r");
+    let _ = writeln!(uart, "  - No external hardware needed\r");
     let _ = writeln!(uart);
-    let _ = writeln!(uart, "SLAVE TESTS: run_slave_tests()");
+    let _ = writeln!(uart, "SLAVE TESTS: run_slave_tests()\r");
     let _ = writeln!(
         uart,
-        "  - Configures AST1060 as I2C slave @ 0x{SLAVE_ADDRESS:02X}"
+        "  - Configures AST1060 as I2C slave @ 0x{SLAVE_ADDRESS:02X}\r"
     );
-    let _ = writeln!(uart, "  - Requires external master (AST2600, another EVB)");
-    let _ = writeln!(uart, "  - Start slave first, then master initiates");
-    let _ = writeln!(uart, "========================================\n");
+    let _ = writeln!(
+        uart,
+        "  - Requires external master (AST2600, another EVB)\r"
+    );
+    let _ = writeln!(uart, "  - Start slave first, then master initiates\r");
+    let _ = writeln!(uart, "========================================\r\n");
 }

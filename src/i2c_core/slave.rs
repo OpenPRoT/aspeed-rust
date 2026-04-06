@@ -52,6 +52,8 @@ pub enum SlaveEvent {
     DataReceived { len: usize },
     /// Data sent to master
     DataSent { len: usize },
+    /// Data received from master and send data to master (combined event)
+    DataReceivedAndSent { rx_len: usize, tx_len: usize },
     /// Stop condition received
     Stop,
 }
@@ -385,8 +387,17 @@ impl Ast1060I2c<'_> {
                         | constants::AST_I2CS_WAIT_TX_DMA
             {
                 // S: rx_done | wait_tx
-                return Some(SlaveEvent::DataSent {
-                    len: usize::from(self.regs().i2cc0c().read().tx_data_byte_count().bits() + 1),
+                return Some(SlaveEvent::DataReceivedAndSent {
+                    rx_len: usize::from(
+                        self.regs()
+                            .i2cc0c()
+                            .read()
+                            .actual_rxd_pool_buffer_size()
+                            .bits(),
+                    ),
+                    tx_len: usize::from(
+                        self.regs().i2cc0c().read().tx_data_byte_count().bits() + 1,
+                    ),
                 });
             } else if sts == constants::AST_I2CS_SLAVE_MATCH | constants::AST_I2CS_WAIT_TX_DMA {
                 // S: Sw | wait_tx

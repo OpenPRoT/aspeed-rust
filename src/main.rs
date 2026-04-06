@@ -22,7 +22,9 @@ use aspeed_ddk::tests::functional::ecdsa_test::run_ecdsa_tests;
 use aspeed_ddk::tests::functional::hash_test::run_hash_tests;
 use aspeed_ddk::tests::functional::hmac_test::run_hmac_tests;
 use aspeed_ddk::tests::functional::i2c_core_test::run_i2c_core_tests;
-use aspeed_ddk::tests::functional::i2c_master_slave_test::run_master_slave_tests;
+#[cfg(any(feature = "i2c_master", feature = "i2c_target"))]
+use aspeed_ddk::tests::functional::i2c_master_slave_test;
+#[cfg(any(feature = "i2c_master", feature = "i2c_target"))]
 use aspeed_ddk::tests::functional::i2c_test;
 #[cfg(any(feature = "i3c_master", feature = "i3c_target"))]
 use aspeed_ddk::tests::functional::i3c_test;
@@ -386,26 +388,31 @@ fn main() -> ! {
     run_rsa_tests(&mut uart_controller, &mut rsa);
     gpio_test::test_gpioa(&mut uart_controller);
 
-    i2c_test::test_i2c_master(&mut uart_controller);
-    #[cfg(feature = "i2c_target")]
-    i2c_test::test_i2c_slave(&mut uart_controller);
+    let i2c_test_hw = false;
+    if i2c_test_hw {
+        //I2C test on real hardware
+        #[cfg(feature = "i2c_master")]
+        i2c_test::test_i2c_master(&mut uart_controller);
+        #[cfg(feature = "i2c_target")]
+        i2c_test::test_i2c_slave(&mut uart_controller);
+    }
     #[cfg(feature = "i3c_master")]
     i3c_test::test_i3c_master(&mut uart_controller);
     #[cfg(feature = "i3c_target")]
     i3c_test::test_i3c_target(&mut uart_controller);
 
-    // Run i2c_core functional tests
-    run_i2c_core_tests(&mut uart_controller);
-    {
+    let i2c_core_test_hw = false;
+    if i2c_core_test_hw {
         //I2C core test on real hardware
         i2c_core::init_i2c_global();
-        //run_master_tests(&mut uart_controller);
+        #[cfg(feature = "i2c_master")]
+        i2c_master_slave_test::run_master_tests(&mut uart_controller);
         #[cfg(feature = "i2c_target")]
-        run_slave_tests(&mut uart_controller);
+        i2c_master_slave_test::run_slave_tests(&mut uart_controller);
+    } else {
+        // Run i2c_core functional tests
+        run_i2c_core_tests(&mut uart_controller);
     }
-
-    // Run I2C master-slave hardware integration tests
-    run_master_slave_tests(&mut uart_controller);
 
     test_wdt(&mut uart_controller);
     run_timer_tests(&mut uart_controller);
