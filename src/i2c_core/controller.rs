@@ -2,6 +2,9 @@
 
 //! AST1060 I2C controller implementation
 
+use crate::common::DummyDelay;
+use embedded_hal::delay::DelayNs;
+
 use super::timing::configure_timing;
 use super::types::{I2cConfig, I2cController, I2cXferMode};
 use super::{constants, error::I2cError};
@@ -185,12 +188,14 @@ impl<'a> Ast1060I2c<'a> {
 
     /// Wait for completion with timeout (visible to master/transfer modules)
     pub(crate) fn wait_completion(&mut self, timeout_us: u32) -> Result<(), I2cError> {
+        let mut delay = DummyDelay {};
         let mut timeout = timeout_us;
         self.completion = false;
 
         while timeout > 0 && !self.completion {
             self.handle_interrupt()?;
             timeout = timeout.saturating_sub(1);
+            delay.delay_ns(100_000);
         }
 
         if self.completion {

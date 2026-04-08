@@ -380,12 +380,6 @@ fn test_ast1060_i2c_slave_write_read(uart: &mut UartController<'_>, results: &mu
                 return;
             }
         }
-
-        //Small delay
-        for _ in 0..1000 {
-            core::hint::spin_loop();
-        }
-
         match i2c.read(SLAVE_ADDRESS, &mut read_buf) {
             Ok(()) => {
                 let _ = writeln!(uart, "  read value: 0x{:02X}\r", read_buf[0]);
