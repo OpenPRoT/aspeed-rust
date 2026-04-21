@@ -67,6 +67,10 @@ pub const AST_I2CC_SLAVE_EN: u32 = 1 << 1;
 pub const AST_I2CC_MASTER_EN: u32 = 1 << 0;
 /// Disable multi-master capability
 pub const AST_I2CC_MULTI_MASTER_DIS: u32 = 1 << 15;
+/// Enable save address byte into buffer for Slave Packet mode receive command (I2CC00 bit 20)
+/// Per AST1060 datasheet section 13.3.1, when this bit is set, the slave address byte
+/// is saved into the receive buffer in slave packet mode.
+pub const AST_I2CC_SLAVE_PKT_SAVE_ADDR: u32 = 1 << 20;
 
 // Master Command Register (I2CM18) bit definitions
 // Reference: ast1060_i2c.rs:58-69
