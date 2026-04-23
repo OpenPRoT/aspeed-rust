@@ -154,8 +154,3 @@ impl UartController<'_> {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    // Unit tests would go here if we had a mock UART
-}

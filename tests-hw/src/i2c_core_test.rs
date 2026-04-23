@@ -12,12 +12,12 @@
 //! output is handled at this test layer via the UART controller passed to
 //! each test function. This keeps the driver portable and testable.
 
-use crate::i2c_core::{
+use aspeed_ddk::i2c_core::{
     Ast1060I2c, ClockConfig, Controller, I2cConfig, I2cController, I2cError, I2cSpeed, I2cXferMode,
     SlaveConfig,
 };
-use crate::pinctrl;
-use crate::uart_core::UartController;
+use aspeed_ddk::pinctrl;
+use aspeed_ddk::uart_core::UartController;
 use ast1060_pac::Peripherals;
 use embedded_io::Write;
 

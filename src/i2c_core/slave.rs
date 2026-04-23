@@ -136,11 +136,11 @@ impl Ast1060I2c<'_> {
         // Enable slave mode and save address byte in packet mode (I2CC00 bit 20)
         // This makes the hardware include the destination address byte in the receive buffer
         // which is required for MCTP-over-SMBus (DSP0237) packet format.
-        self.regs()
-            .i2cc00()
-            .modify(|r, w| unsafe {
-                w.bits(r.bits() | constants::AST_I2CC_SLAVE_EN | constants::AST_I2CC_SLAVE_PKT_SAVE_ADDR)
-            });
+        self.regs().i2cc00().modify(|r, w| unsafe {
+            w.bits(
+                r.bits() | constants::AST_I2CC_SLAVE_EN | constants::AST_I2CC_SLAVE_PKT_SAVE_ADDR,
+            )
+        });
 
         // Configure slave mode
         let mut cmd = 0u32;

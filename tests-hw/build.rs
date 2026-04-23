@@ -24,6 +24,14 @@ fn main() {
         .unwrap()
         .write_all(include_bytes!("memory.x"))
         .unwrap();
+
+    // Copy link.x to the output directory so the linker can find our
+    // custom linker script before the one provided by cortex-m-rt.
+    File::create(out.join("link.x"))
+        .unwrap()
+        .write_all(include_bytes!("link.x"))
+        .unwrap();
+
     println!("cargo:rustc-link-search={}", out.display());
 
     // By default, Cargo will re-run a build script whenever

@@ -1,15 +1,15 @@
 // Licensed under the Apache-2.0 license
 
-use crate::hace_controller::HaceController;
-use crate::hash::{IntoHashAlgo, Sha256, Sha384, Sha512};
-use crate::uart_core::UartController;
+use aspeed_ddk::hace_controller::HaceController;
+use aspeed_ddk::hash::{IntoHashAlgo, Sha256, Sha384, Sha512};
+use aspeed_ddk::uart_core::UartController;
 use core::any::TypeId;
 use embedded_io::Write;
 use proposed_traits::digest::{DigestAlgorithm, DigestInit, DigestOp};
 
 fn print_hex_array(uart: &mut UartController, data: &[u8], bytes_per_line: usize) {
     for (i, b) in data.iter().enumerate() {
-        if i.is_multiple_of(bytes_per_line) {
+        if i % bytes_per_line == 0 {
             writeln!(uart, "\r").unwrap();
         } else {
             write!(uart, " ").unwrap();

@@ -36,14 +36,13 @@ fn run_unit_tests() -> Result<()> {
 
     let status = Command::new("cargo")
         .current_dir(&*PROJECT_ROOT)
-        // FIXME: Temporarily exclude `aspeed-ddk` since it's a no_std bare-metal crate.
-        // Once an emulator is available or host-side unit tests are added for aspeed-ddk,
-        // this exclusion should be removed.
         .args([
             "test",
             "--workspace",
             "--exclude",
             "aspeed-ddk",
+            "--exclude",
+            "aspeed-ddk-tests-hw",
             "--target",
             "x86_64-unknown-linux-gnu",
         ])
@@ -62,14 +61,13 @@ fn run_integration_tests() -> Result<()> {
 
     let status = Command::new("cargo")
         .current_dir(&*PROJECT_ROOT)
-        // FIXME: Temporarily exclude `aspeed-ddk` since it's a no_std bare-metal crate.
-        // Once an emulator is available or host-side unit tests are added for aspeed-ddk,
-        // this exclusion should be removed.
         .args([
             "test",
             "--workspace",
             "--exclude",
             "aspeed-ddk",
+            "--exclude",
+            "aspeed-ddk-tests-hw",
             "--target",
             "x86_64-unknown-linux-gnu",
         ])
@@ -153,6 +151,8 @@ fn run_hardware_test_suite(uart: &str, suite: &str) -> Result<()> {
         .current_dir(&*PROJECT_ROOT)
         .args([
             "build",
+            "-p",
+            "aspeed-ddk-tests-hw",
             "--release",
             "--target",
             "thumbv7em-none-eabihf",
@@ -166,16 +166,18 @@ fn run_hardware_test_suite(uart: &str, suite: &str) -> Result<()> {
     }
 
     // Generate UART boot image
-    // let binary_path = PROJECT_ROOT.join("target/thumbv7em-none-eabihf/release/aspeed-ddk");
-    let elf_path = PROJECT_ROOT.join("target/thumbv7em-none-eabihf/release/aspeed-ddk");
+    let elf_path = PROJECT_ROOT.join("target/thumbv7em-none-eabihf/release/aspeed-ddk-tests-hw");
     assert!(elf_path.exists(), "ELF file not found: {:?}", elf_path);
     println!("ELF binary path: {:?}", elf_path);
     let bin_path = PROJECT_ROOT.join(format!("target/{}-test-{}.bin", suite, "release"));
     println!("Binary path: {:?}", bin_path);
 
     let _status = Command::new("cargo")
+        .current_dir(&*PROJECT_ROOT)
         .args([
             "objcopy",
+            "-p",
+            "aspeed-ddk-tests-hw",
             "--target",
             "thumbv7em-none-eabihf",
             "--release",

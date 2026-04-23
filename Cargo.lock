@@ -65,7 +65,6 @@ dependencies = [
  "ast1060-pac",
  "bitflags",
  "cortex-m",
- "cortex-m-rt",
  "critical-section",
  "embedded-hal 1.0.0",
  "embedded-hal 1.0.0-alpha.1",
@@ -75,11 +74,28 @@ dependencies = [
  "hex-literal",
  "nb 1.1.0",
  "openprot-hal-blocking",
- "panic-halt",
  "paste",
  "proposed-traits",
  "static_cell",
  "zerocopy",
+]
+
+[[package]]
+name = "aspeed-ddk-tests-hw"
+version = "0.1.0"
+dependencies = [
+ "aspeed-ddk",
+ "ast1060-pac",
+ "cortex-m",
+ "cortex-m-rt",
+ "embedded-hal 1.0.0",
+ "embedded-hal 1.0.0-alpha.1",
+ "embedded-io",
+ "fugit",
+ "hex-literal",
+ "openprot-hal-blocking",
+ "panic-halt",
+ "proposed-traits",
 ]
 
 [[package]]

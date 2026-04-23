@@ -1,7 +1,7 @@
 # Licensed under the Apache-2.0 license
 
 [workspace]
-members = ["xtask"]
+members = ["xtask", "tests-hw"]
 exclude = []
 resolver = "2"
 
@@ -22,10 +22,6 @@ i2c_master = []
 i2c_target = []
 i3c_master = []
 i3c_target = []
-test-rsa = []
-test-ecdsa = []
-test-hmac = []
-test-hash = []
 spi_dma = []
 spi_dma_write = []
 spi_dma_irq = []
@@ -48,6 +44,4 @@ openprot-hal-blocking = { git="https://github.com/OpenPRoT/openprot" }
 zerocopy = { version = "0.8.25", features = ["derive"] }
 critical-section = "1.2"
 cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
-cortex-m-rt = { version = "0.7.5", features = ["device"] }
-panic-halt = "1.0.0"
 

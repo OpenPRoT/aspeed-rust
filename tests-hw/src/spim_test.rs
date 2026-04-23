@@ -2,14 +2,18 @@
 
 use ast1060_pac::{Spipf, Spipf1, Spipf2, Spipf3};
 
-use crate::astdebug;
-use crate::spimonitor::{RegionInfo, SpiMonitor, SpiMonitorInit, SpimExtMuxSel};
-use crate::uart_core::UartController;
+use aspeed_ddk::astdebug;
+use aspeed_ddk::spimonitor::{RegionInfo, SpiMonitor, SpiMonitorInit, SpimExtMuxSel};
+use aspeed_ddk::uart_core::UartController;
 use embedded_io::Write;
 
+#[allow(dead_code)]
 pub const SPIM1_BASE: usize = 0x7e79_1000;
+#[allow(dead_code)]
 pub const SPIM2_BASE: usize = 0x7e79_2000;
+#[allow(dead_code)]
 pub const SPIM3_BASE: usize = 0x7e79_3000;
+#[allow(dead_code)]
 pub const SPIM4_BASE: usize = 0x7e79_4000;
 
 //follow DTS configuration examples
@@ -66,6 +70,7 @@ pub fn test_spim0(uart: &mut UartController<'_>) {
     // print spim pointer value
 }
 
+#[allow(dead_code)]
 pub fn test_spim1() {
     let allow_cmds: [u8; 27] = [
         0x03, 0x13, 0x0b, 0x0c, 0x6b, 0x6c, 0x01, 0x05, 0x35, 0x06, 0x04, 0x20, 0x21, 0x9f, 0x5a,
@@ -91,6 +96,7 @@ pub fn test_spim1() {
     spi_monitor1.ext_mux_config(SpimExtMuxSel::SpimExtMuxSel0);
 }
 
+#[allow(dead_code)]
 pub fn test_spim2() {
     let allow_cmds: [u8; 27] = [
         0x03, 0x13, 0x0b, 0x0c, 0x6b, 0x6c, 0x01, 0x05, 0x35, 0x06, 0x04, 0x20, 0x21, 0x9f, 0x5a,
@@ -116,6 +122,7 @@ pub fn test_spim2() {
     spi_monitor2.ext_mux_config(SpimExtMuxSel::SpimExtMuxSel0);
 }
 
+#[allow(dead_code)]
 pub fn test_spim3(uart: &mut UartController<'_>) {
     uart.write_all(b"\r\n####### SPIM3 setup #######\r\n")
         .unwrap();

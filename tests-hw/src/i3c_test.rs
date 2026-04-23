@@ -1,20 +1,20 @@
 // Licensed under the Apache-2.0 license
 
-use crate::common::{DummyDelay, UartLogger};
-use crate::i3c::config::I3cConfig;
-use crate::i3c::config::I3cTargetConfig;
-use crate::i3c::constants::I3C_MSG_READ;
-use crate::i3c::constants::I3C_MSG_STOP;
-use crate::i3c::constants::I3C_MSG_WRITE;
-use crate::i3c::controller::I3cController;
-use crate::i3c::hardware::Ast1060I3c;
-use crate::i3c::hardware::HardwareCore;
-use crate::i3c::hardware::HardwareTarget;
-use crate::i3c::hardware::HardwareTransfer;
-use crate::i3c::ibi::{i3c_ibi_workq_consumer, IbiWork};
-use crate::i3c::types::I3cMsg;
-use crate::pinctrl;
-use crate::uart_core::{UartConfig, UartController};
+use aspeed_ddk::common::{DummyDelay, UartLogger};
+use aspeed_ddk::i3c::config::I3cConfig;
+use aspeed_ddk::i3c::config::I3cTargetConfig;
+use aspeed_ddk::i3c::constants::I3C_MSG_READ;
+use aspeed_ddk::i3c::constants::I3C_MSG_STOP;
+use aspeed_ddk::i3c::constants::I3C_MSG_WRITE;
+use aspeed_ddk::i3c::controller::I3cController;
+use aspeed_ddk::i3c::hardware::Ast1060I3c;
+use aspeed_ddk::i3c::hardware::HardwareCore;
+use aspeed_ddk::i3c::hardware::HardwareTarget;
+use aspeed_ddk::i3c::hardware::HardwareTransfer;
+use aspeed_ddk::i3c::ibi::{i3c_ibi_workq_consumer, IbiWork};
+use aspeed_ddk::i3c::types::I3cMsg;
+use aspeed_ddk::pinctrl;
+use aspeed_ddk::uart_core::{UartConfig, UartController};
 
 use core::ptr::read_volatile;
 use embedded_hal::delay::DelayNs;

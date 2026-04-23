@@ -1,11 +1,11 @@
 // Licensed under the Apache-2.0 license
 
-use crate::common::{NoOpLogger, UartLogger};
-use crate::i2c::ast1060_i2c::Ast1060I2c;
-use crate::i2c::common::{I2cConfigBuilder, I2cSpeed, I2cXferMode};
-use crate::i2c::i2c_controller::{HardwareInterface, I2cController};
-use crate::pinctrl;
-use crate::uart_core::{UartConfig, UartController};
+use aspeed_ddk::common::{NoOpLogger, UartLogger};
+use aspeed_ddk::i2c::ast1060_i2c::Ast1060I2c;
+use aspeed_ddk::i2c::common::{I2cConfigBuilder, I2cSpeed, I2cXferMode};
+use aspeed_ddk::i2c::i2c_controller::{HardwareInterface, I2cController};
+use aspeed_ddk::pinctrl;
+use aspeed_ddk::uart_core::{UartConfig, UartController};
 use ast1060_pac::Peripherals;
 #[cfg(feature = "i2c_target")]
 use cortex_m::peripheral::NVIC;

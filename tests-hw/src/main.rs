@@ -18,20 +18,29 @@ use aspeed_ddk::spi;
 use aspeed_ddk::syscon::{ClockId, ResetId, SysCon};
 use fugit::MillisDurationU32 as MilliSeconds;
 
-use aspeed_ddk::tests::functional::ecdsa_test::run_ecdsa_tests;
-use aspeed_ddk::tests::functional::hash_test::run_hash_tests;
-use aspeed_ddk::tests::functional::hmac_test::run_hmac_tests;
-use aspeed_ddk::tests::functional::i2c_core_test::run_i2c_core_tests;
+mod ecdsa_test;
+mod gpio_test;
+mod hash_test;
+mod hmac_test;
+mod i2c_core_test;
 #[cfg(any(feature = "i2c_master", feature = "i2c_target"))]
-use aspeed_ddk::tests::functional::i2c_master_slave_test;
+mod i2c_master_slave_test;
 #[cfg(any(feature = "i2c_master", feature = "i2c_target"))]
-use aspeed_ddk::tests::functional::i2c_test;
+mod i2c_test;
 #[cfg(any(feature = "i3c_master", feature = "i3c_target"))]
-use aspeed_ddk::tests::functional::i3c_test;
-use aspeed_ddk::tests::functional::rsa_test::run_rsa_tests;
-use aspeed_ddk::tests::functional::timer_test::run_timer_tests;
-use aspeed_ddk::tests::functional::{gpio_test, spim_test};
+mod i3c_test;
+mod rsa_test;
+mod rsa_test_vec;
+mod spim_test;
+mod timer_test;
+
+use ecdsa_test::run_ecdsa_tests;
+use hash_test::run_hash_tests;
+use hmac_test::run_hmac_tests;
+use i2c_core_test::run_i2c_core_tests;
 use panic_halt as _;
+use rsa_test::run_rsa_tests;
+use timer_test::run_timer_tests;
 
 // Import owned API traits and types
 use aspeed_ddk::hash_owned::{Sha2_256, Sha2_384, Sha2_512};

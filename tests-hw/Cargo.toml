@@ -1,0 +1,42 @@
+# Licensed under the Apache-2.0 license
+
+[package]
+name = "aspeed-ddk-tests-hw"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[[bin]]
+name = "aspeed-ddk-tests-hw"
+path = "src/main.rs"
+
+[features]
+default = []
+isr-handlers = ["aspeed-ddk/isr-handlers"]
+i2c_master = ["aspeed-ddk/i2c_master"]
+i2c_target = ["aspeed-ddk/i2c_target"]
+i3c_master = ["aspeed-ddk/i3c_master"]
+i3c_target = ["aspeed-ddk/i3c_target"]
+test-rsa = []
+test-ecdsa = []
+test-hmac = []
+test-hash = []
+spi_dma = ["aspeed-ddk/spi_dma"]
+spi_dma_write = ["aspeed-ddk/spi_dma_write"]
+spi_dma_irq = ["aspeed-ddk/spi_dma_irq"]
+spi_monitor = ["aspeed-ddk/spi_monitor"]
+
+[dependencies]
+aspeed-ddk = { path = ".." }
+ast1060-pac = { git = "https://github.com/OpenPRoT/ast1060-pac.git", branch = "main", features = ["rt"] }
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
+cortex-m-rt = { version = "0.7.5", features = ["device"] }
+panic-halt = "1.0.0"
+embedded-hal = "1.0.0"
+embedded-hal-old = { git = "https://github.com/rust-embedded/embedded-hal.git", rev = "599d44fdc7e709cb9ae6580ec11c0b7f7f102", package = "embedded-hal" }
+embedded-io = "0.6.1"
+fugit = "0.3.7"
+hex-literal = "0.4"
+proposed-traits = { git = "https://github.com/rusty1968/proposed_traits.git", package = "proposed-traits", rev = "85641310df5a5276c67f81621b104322cff0286c" }
+openprot-hal-blocking = { git = "https://github.com/OpenPRoT/openprot" }

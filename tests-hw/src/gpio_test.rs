@@ -4,10 +4,10 @@ use ast1060_pac::Peripherals;
 use embedded_hal::digital::{InputPin, OutputPin, StatefulOutputPin};
 use embedded_io::Write;
 
-use crate::common::DummyDelay;
-use crate::gpio::{gpioa, gpioh, gpiol, gpiom, Floating, GpioExt};
-use crate::pinctrl;
-use crate::uart_core::UartController;
+use aspeed_ddk::common::DummyDelay;
+use aspeed_ddk::gpio::{gpioa, gpioh, gpiol, gpiom, Floating, GpioExt};
+use aspeed_ddk::pinctrl;
+use aspeed_ddk::uart_core::UartController;
 use embedded_hal::delay::DelayNs;
 
 pub fn test_gpioa(uart: &mut UartController<'_>) {

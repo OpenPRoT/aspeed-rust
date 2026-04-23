@@ -1,8 +1,8 @@
 // Licensed under the Apache-2.0 license
 
-use crate::rsa::{RsaDigest, RsaPrivateKey, RsaPublicKey, RsaSignatureData};
-use crate::tests::functional::rsa_test_vec::RSA_VERIFY_TV;
-use crate::uart_core::UartController;
+use crate::rsa_test_vec::RSA_VERIFY_TV;
+use aspeed_ddk::rsa::{RsaDigest, RsaPrivateKey, RsaPublicKey, RsaSignatureData};
+use aspeed_ddk::uart_core::UartController;
 use embedded_io::Write;
 use proposed_traits::rsa::{PaddingMode, RsaSign, RsaVerify};
 
