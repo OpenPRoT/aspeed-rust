@@ -10,17 +10,32 @@ use aspeed_ddk::watchdog::WdtController;
 use ast1060_pac::Peripherals;
 use ast1060_pac::{Wdt, Wdt1};
 
+#[cfg(feature = "test-ecdsa")]
 use aspeed_ddk::ecdsa::AspeedEcdsa;
+#[cfg(any(feature = "test-hash", feature = "test-hmac"))]
 use aspeed_ddk::hace_controller::HaceController;
 use aspeed_ddk::i2c_core;
+#[cfg(feature = "test-rsa")]
 use aspeed_ddk::rsa::AspeedRsa;
 use aspeed_ddk::spi;
-use aspeed_ddk::syscon::{ClockId, ResetId, SysCon};
+#[cfg(any(
+    feature = "test-hash",
+    feature = "test-hmac",
+    feature = "test-rsa",
+    feature = "test-ecdsa"
+))]
+use aspeed_ddk::syscon::ClockId;
+#[cfg(any(feature = "test-hash", feature = "test-hmac"))]
+use aspeed_ddk::syscon::ResetId;
+use aspeed_ddk::syscon::SysCon;
 use fugit::MillisDurationU32 as MilliSeconds;
 
+#[cfg(feature = "test-ecdsa")]
 mod ecdsa_test;
 mod gpio_test;
+#[cfg(feature = "test-hash")]
 mod hash_test;
+#[cfg(feature = "test-hmac")]
 mod hmac_test;
 mod i2c_core_test;
 #[cfg(any(feature = "i2c_master", feature = "i2c_target"))]
@@ -29,23 +44,32 @@ mod i2c_master_slave_test;
 mod i2c_test;
 #[cfg(any(feature = "i3c_master", feature = "i3c_target"))]
 mod i3c_test;
+#[cfg(feature = "test-rsa")]
 mod rsa_test;
+#[cfg(feature = "test-rsa")]
 mod rsa_test_vec;
 mod spim_test;
 mod timer_test;
 
+#[cfg(feature = "test-ecdsa")]
 use ecdsa_test::run_ecdsa_tests;
+#[cfg(feature = "test-hash")]
 use hash_test::run_hash_tests;
+#[cfg(feature = "test-hmac")]
 use hmac_test::run_hmac_tests;
 use i2c_core_test::run_i2c_core_tests;
 use panic_halt as _;
+#[cfg(feature = "test-rsa")]
 use rsa_test::run_rsa_tests;
 use timer_test::run_timer_tests;
 
-// Import owned API traits and types
+// Import owned API traits and types (used by the owned-digest hash tests)
+#[cfg(feature = "test-hash")]
 use aspeed_ddk::hash_owned::{Sha2_256, Sha2_384, Sha2_512};
+#[cfg(feature = "test-hash")]
 use openprot_hal_blocking::digest::owned::{DigestInit, DigestOp};
 
+#[cfg(any(feature = "test-hash", feature = "test-hmac"))]
 use proposed_traits::system_control::ResetControl;
 
 use core::ptr::{read_volatile, write_volatile};
@@ -137,6 +161,7 @@ macro_rules! debug_halt {
 }
 
 /// Test the owned digest API demonstrating move-based resource management
+#[cfg(feature = "test-hash")]
 fn test_owned_digest_api(uart: &mut UartController<'_>) {
     writeln!(uart, "\r\nRunning owned digest API tests...\r\n").unwrap();
 
@@ -166,6 +191,7 @@ fn test_owned_digest_api(uart: &mut UartController<'_>) {
 }
 
 /// Validate digest against known test vector
+#[cfg(feature = "test-hash")]
 fn validate_digest(
     actual: &[u32],
     expected: &[u8],
@@ -219,6 +245,7 @@ fn validate_digest(
 }
 
 /// Test owned SHA256 API demonstrating move semantics
+#[cfg(feature = "test-hash")]
 fn test_owned_sha256(uart: &mut UartController<'_>, hace: ast1060_pac::Hace) {
     let controller = HaceController::new(hace);
 
@@ -249,6 +276,7 @@ fn test_owned_sha256(uart: &mut UartController<'_>, hace: ast1060_pac::Hace) {
 }
 
 /// Test owned SHA384 API demonstrating controller recovery
+#[cfg(feature = "test-hash")]
 fn test_owned_sha384(uart: &mut UartController<'_>, hace: ast1060_pac::Hace) {
     let controller = HaceController::new(hace);
 
@@ -284,6 +312,7 @@ fn test_owned_sha384(uart: &mut UartController<'_>, hace: ast1060_pac::Hace) {
 }
 
 /// Test owned SHA512 API demonstrating cancellation
+#[cfg(feature = "test-hash")]
 fn test_owned_sha512(uart: &mut UartController<'_>, hace: ast1060_pac::Hace) {
     let controller = HaceController::new(hace);
 
@@ -334,20 +363,22 @@ fn main() -> ! {
     let mut uart_controller = UartController::new(uart_regs);
     uart_controller.init(&UartConfig::default()).unwrap();
 
-    let hace = peripherals.hace;
     let scu = peripherals.scu;
-    let secure = peripherals.secure;
 
     writeln!(uart_controller, "\r\nHello, world!!\r\n").unwrap();
 
     let delay = DummyDelay;
 
+    #[allow(unused_mut, unused_variables)]
     let mut syscon = SysCon::new(delay.clone(), scu);
 
-    // Enable HACE (Hash and Crypto Engine)
-    let _ = syscon.enable_clock(ClockId::ClkYCLK as u8);
-    let reset_id = ResetId::RstHACE;
-    let _ = syscon.reset_deassert(&reset_id);
+    // Enable HACE (Hash and Crypto Engine) when hash/hmac tests are active
+    #[cfg(any(feature = "test-hash", feature = "test-hmac"))]
+    {
+        let _ = syscon.enable_clock(ClockId::ClkYCLK as u8);
+        let reset_id = ResetId::RstHACE;
+        let _ = syscon.reset_deassert(&reset_id);
+    }
 
     spi::spitest::show_spi_regiters(&mut uart_controller);
     let test_spicontroller = false;
@@ -376,25 +407,43 @@ fn main() -> ! {
         gpio_test::test_gpio_bmc_reset(&mut uart_controller);
     }
 
-    #[allow(unused_mut, unused_variables)]
-    let mut hace_controller = HaceController::new(hace);
+    #[cfg(any(feature = "test-hash", feature = "test-hmac"))]
+    {
+        let hace = peripherals.hace;
+        #[allow(unused_mut, unused_variables)]
+        let mut hace_controller = HaceController::new(hace);
 
-    run_hash_tests(&mut uart_controller, &mut hace_controller);
-    run_hmac_tests(&mut uart_controller, &mut hace_controller);
+        #[cfg(feature = "test-hash")]
+        run_hash_tests(&mut uart_controller, &mut hace_controller);
+        #[cfg(feature = "test-hmac")]
+        run_hmac_tests(&mut uart_controller, &mut hace_controller);
+    }
 
     // Test the owned digest API
+    #[cfg(feature = "test-hash")]
     test_owned_digest_api(&mut uart_controller);
 
-    // Enable RSA and ECC
-    let _ = syscon.enable_clock(ClockId::ClkRSACLK as u8);
+    // Enable RSA and ECC when RSA/ECDSA tests are active
+    #[cfg(any(feature = "test-rsa", feature = "test-ecdsa"))]
+    {
+        let secure = peripherals.secure;
+        let _ = syscon.enable_clock(ClockId::ClkRSACLK as u8);
 
-    #[allow(unused_mut, unused_variables)]
-    let mut ecdsa = AspeedEcdsa::new(&secure, delay.clone());
-    run_ecdsa_tests(&mut uart_controller, &mut ecdsa);
+        #[cfg(feature = "test-ecdsa")]
+        {
+            #[allow(unused_mut, unused_variables)]
+            let mut ecdsa = AspeedEcdsa::new(&secure, delay.clone());
+            run_ecdsa_tests(&mut uart_controller, &mut ecdsa);
+        }
 
-    #[allow(unused_mut, unused_variables)]
-    let mut rsa = AspeedRsa::new(&secure, delay);
-    run_rsa_tests(&mut uart_controller, &mut rsa);
+        #[cfg(feature = "test-rsa")]
+        {
+            #[allow(unused_mut, unused_variables)]
+            let mut rsa = AspeedRsa::new(&secure, delay);
+            run_rsa_tests(&mut uart_controller, &mut rsa);
+        }
+    }
+
     gpio_test::test_gpioa(&mut uart_controller);
 
     let i2c_test_hw = false;

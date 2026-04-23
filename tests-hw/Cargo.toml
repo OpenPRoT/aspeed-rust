@@ -12,7 +12,7 @@ name = "aspeed-ddk-tests-hw"
 path = "src/main.rs"
 
 [features]
-default = []
+default = ["test-rsa", "test-ecdsa", "test-hmac", "test-hash"]
 isr-handlers = ["aspeed-ddk/isr-handlers"]
 i2c_master = ["aspeed-ddk/i2c_master"]
 i2c_target = ["aspeed-ddk/i2c_target"]

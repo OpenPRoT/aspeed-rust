@@ -156,6 +156,7 @@ fn run_hardware_test_suite(uart: &str, suite: &str) -> Result<()> {
             "--release",
             "--target",
             "thumbv7em-none-eabihf",
+            "--no-default-features",
             "--features",
             &feature,
         ])
@@ -181,6 +182,9 @@ fn run_hardware_test_suite(uart: &str, suite: &str) -> Result<()> {
             "--target",
             "thumbv7em-none-eabihf",
             "--release",
+            "--no-default-features",
+            "--features",
+            &feature,
             "--",
             "-O",
             "binary",
