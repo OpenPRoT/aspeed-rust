@@ -1,5 +1,8 @@
 // Licensed under the Apache-2.0 license
 
+// Enforce Copilot coding guidelines - prevent panic-prone patterns in production code only
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::indexing_slicing))]
+#![cfg_attr(not(test), warn(clippy::expect_used))]
 #![cfg_attr(not(test), no_std)]
 pub mod astdebug;
 pub mod common;
