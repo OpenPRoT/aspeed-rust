@@ -268,6 +268,121 @@ pub fn test_i2c_core_master(uart: &mut UartController<'_>) {
     writeln!(uart, "####### I2C Core Master Test Complete #######\r\n").ok();
 }
 
+/// Test I2C master DMA path (`i2c_core` API)
+///
+/// Exercises `Ast1060I2c::new_with_dma` and
+/// `Ast1060I2c::from_initialized_with_dma` with payloads larger than
+/// the 32-byte FIFO size to ensure the DMA transfer path is selected.
+pub fn test_i2c_core_master_dma(uart: &mut UartController<'_>) {
+    writeln!(uart, "\r\n####### I2C Core Master DMA Test #######\r").ok();
+
+    let peripherals = unsafe { Peripherals::steal() };
+
+    let i2c_regs = &peripherals.i2c1;
+    let buff_regs = &peripherals.i2cbuff1;
+
+    let Some(controller_id) = Controller::new(1) else {
+        writeln!(uart, "FAIL: Invalid controller ID\r").ok();
+        return;
+    };
+    let controller = I2cController {
+        controller: controller_id,
+        registers: i2c_regs,
+        buff_registers: buff_regs,
+    };
+
+    let config = I2cConfig {
+        speed: I2cSpeed::Standard,
+        xfer_mode: I2cXferMode::DmaMode,
+        multi_master: true,
+        smbus_timeout: true,
+        smbus_alert: false,
+        clock_config: ClockConfig::ast1060_default(),
+    };
+
+    // DMA staging buffer (non-cached placement is required in production,
+    // but this functional test still validates API/flow and error handling).
+    let mut dma_buf = [0u8; 4096];
+
+    let mut i2c = match Ast1060I2c::new_with_dma(&controller, config, &mut dma_buf) {
+        Ok(i) => {
+            writeln!(uart, "I2C1 DMA initialized via new_with_dma\r").ok();
+            i
+        }
+        Err(e) => {
+            writeln!(uart, "FAIL: I2C1 DMA init error: {e:?}\r").ok();
+            return;
+        }
+    };
+
+    // Apply pin control for I2C1
+    pinctrl::Pinctrl::apply_pinctrl_group(pinctrl::PINCTRL_I2C1);
+
+    // Test device: ADT7490 at 0x2e (NoAck expected in QEMU)
+    let addr: u8 = 0x2e;
+
+    // Build payload > 32 bytes to force DMA path instead of FIFO path.
+    let mut wr_large = [0u8; 40];
+    wr_large[0] = 0x4e; // register pointer
+    for (idx, b) in (1u8..).zip(wr_large.iter_mut().skip(1)) {
+        *b = idx;
+    }
+
+    {
+        writeln!(uart, "Test 1: DMA write (40 bytes) to 0x{addr:02X}...").ok();
+        let result = i2c.write(addr, &wr_large);
+        log_i2c_result(uart, "dma_write_40", &result);
+        match result {
+            Ok(()) => writeln!(uart, "  PASS: DMA write OK\r").ok(),
+            Err(I2cError::NoAcknowledge) => {
+                writeln!(uart, "  INFO: NoAck (expected in QEMU - no device)\r").ok()
+            }
+            Err(I2cError::Timeout) => writeln!(uart, "  INFO: Timeout (expected in QEMU)\r").ok(),
+            Err(e) => writeln!(uart, "  FAIL: DMA write error: {e:?}\r").ok(),
+        };
+
+        let mut rd_large = [0u8; 40];
+        writeln!(uart, "Test 2: DMA read (40 bytes) from 0x{addr:02X}...").ok();
+        let result = i2c.read(addr, &mut rd_large);
+        log_i2c_result(uart, "dma_read_40", &result);
+        match result {
+            Ok(()) => writeln!(uart, "  PASS: DMA read OK\r").ok(),
+            Err(I2cError::NoAcknowledge) => {
+                writeln!(uart, "  INFO: NoAck (expected in QEMU - no device)\r").ok()
+            }
+            Err(I2cError::Timeout) => writeln!(uart, "  INFO: Timeout (expected in QEMU)\r").ok(),
+            Err(e) => writeln!(uart, "  FAIL: DMA read error: {e:?}\r").ok(),
+        };
+    }
+
+    // Also exercise the lightweight from_initialized_with_dma() API.
+    let mut i2c_fast = Ast1060I2c::from_initialized_with_dma(&controller, config, &mut dma_buf);
+
+    let reg_addr = [0x4e_u8];
+    let mut data = [0u8; 1];
+    writeln!(
+        uart,
+        "Test 3: DMA write_read via from_initialized_with_dma..."
+    )
+    .ok();
+    let result = i2c_fast.write_read(addr, &reg_addr, &mut data);
+    log_i2c_result(uart, "dma_write_read", &result);
+    match result {
+        Ok(()) => writeln!(uart, "  PASS: DMA write_read OK\r").ok(),
+        Err(I2cError::NoAcknowledge) => {
+            writeln!(uart, "  INFO: NoAck (expected in QEMU - no device)\r").ok()
+        }
+        Err(I2cError::Timeout) => writeln!(uart, "  INFO: Timeout (expected in QEMU)\r").ok(),
+        Err(e) => writeln!(uart, "  FAIL: DMA write_read error: {e:?}\r").ok(),
+    };
+
+    writeln!(
+        uart,
+        "####### I2C Core Master DMA Test Complete #######\r\n"
+    )
+    .ok();
+}
+
 /// Test I2C slave configuration (setup only - actual slave requires external master)
 pub fn test_i2c_core_slave_config(uart: &mut UartController<'_>) {
     writeln!(uart, "\r\n####### I2C Core Slave Config Test #######\r").ok();
@@ -371,6 +486,7 @@ pub fn run_i2c_core_tests(uart: &mut UartController<'_>) {
     test_i2c_core_slave_config(uart);
     test_i2c_core_init(uart);
     test_i2c_core_master(uart);
+    test_i2c_core_master_dma(uart);
 
     writeln!(uart, "\r\n========================================\r").ok();
     writeln!(uart, "   I2C CORE TESTS COMPLETE\r").ok();

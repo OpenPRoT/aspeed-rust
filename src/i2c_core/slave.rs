@@ -121,6 +121,56 @@ impl SlaveBuffer {
 }
 
 impl Ast1060I2c<'_> {
+    #[inline]
+    fn slave_rx_len(&self) -> usize {
+        if self.xfer_mode == I2cXferMode::DmaMode {
+            self.regs().i2cs4c().read().dmarx_actual_len_byte().bits() as usize
+        } else {
+            self.regs()
+                .i2cc0c()
+                .read()
+                .actual_rxd_pool_buffer_size()
+                .bits() as usize
+        }
+    }
+
+    /// Arm slave receive path based on transfer mode.
+    ///
+    /// This mirrors the old AST1060 driver behavior where packet-slave IRQ
+    /// branches re-arm either RX FIFO or RX DMA depending on `xfer_mode`.
+    fn arm_slave_receive(&mut self, cmd: &mut u32) {
+        if self.xfer_mode == I2cXferMode::DmaMode {
+            if let Some(dma_buf) = self.dma_buf.as_deref_mut() {
+                let dma_addr = dma_buf.as_mut_ptr() as u32;
+                let dma_len = u16::try_from(dma_buf.len().min(4096) - 1).unwrap_or(u16::MAX);
+                unsafe {
+                    self.regs().i2cs4c().write(|w| w.bits(0));
+                    self.regs().i2cs38().write(|w| w.bits(dma_addr));
+                    self.regs().i2cs3c().write(|w| w.bits(dma_addr));
+                    self.regs().i2cs2c().write(|w| {
+                        w.dmarx_buf_len_byte()
+                            .bits(dma_len)
+                            .dmarx_buf_len_wr_enbl_for_cur_cmd()
+                            .set_bit()
+                    });
+                }
+                *cmd |= AST_I2CS_RX_DMA_EN;
+            } else {
+                *cmd |= constants::AST_I2CS_RX_BUFF_EN;
+                self.regs().i2cc0c().write(|w| unsafe {
+                    w.rx_pool_buffer_size().bits(constants::I2C_BUF_SIZE - 1)
+                });
+            }
+        } else if self.xfer_mode == I2cXferMode::BufferMode {
+            *cmd |= constants::AST_I2CS_RX_BUFF_EN;
+            self.regs()
+                .i2cc0c()
+                .write(|w| unsafe { w.rx_pool_buffer_size().bits(constants::I2C_BUF_SIZE - 1) });
+        } else {
+            *cmd &= !constants::AST_I2CS_PKT_MODE_EN;
+        }
+    }
+
     /// Configure the controller for slave mode
     pub fn configure_slave(&mut self, config: &SlaveConfig) -> Result<(), I2cError> {
         // Ensure master mode is disabled first
@@ -408,14 +458,14 @@ impl Ast1060I2c<'_> {
                         | constants::AST_I2CS_WAIT_RX_DMA
             {
                 // S: Sw|D
-                cmd |= constants::AST_I2CS_RX_BUFF_EN;
+                self.arm_slave_receive(&mut cmd);
                 unsafe {
                     self.regs().i2cs28().write(|w| w.bits(cmd));
                 }
                 return Some(SlaveEvent::WriteRequest);
             } else if sts == constants::AST_I2CS_SLAVE_MATCH | constants::AST_I2CS_STOP {
                 // S: Sw|P
-                cmd |= constants::AST_I2CS_RX_BUFF_EN;
+                self.arm_slave_receive(&mut cmd);
                 unsafe {
                     self.regs().i2cs28().write(|w| w.bits(cmd));
                 }
@@ -447,13 +497,7 @@ impl Ast1060I2c<'_> {
             {
                 // S: (Sw)|D|(P)
                 return Some(SlaveEvent::DataReceived {
-                    len: usize::from(
-                        self.regs()
-                            .i2cc0c()
-                            .read()
-                            .actual_rxd_pool_buffer_size()
-                            .bits(),
-                    ),
+                    len: self.slave_rx_len(),
                 });
             } else if sts == constants::AST_I2CS_RX_DONE | constants::AST_I2CS_WAIT_TX_DMA
                 || sts
@@ -463,13 +507,7 @@ impl Ast1060I2c<'_> {
             {
                 // S: rx_done | wait_tx
                 return Some(SlaveEvent::DataReceivedAndSent {
-                    rx_len: usize::from(
-                        self.regs()
-                            .i2cc0c()
-                            .read()
-                            .actual_rxd_pool_buffer_size()
-                            .bits(),
-                    ),
+                    rx_len: self.slave_rx_len(),
                     tx_len: usize::from(
                         self.regs().i2cc0c().read().tx_data_byte_count().bits() + 1,
                     ),
@@ -488,11 +526,7 @@ impl Ast1060I2c<'_> {
                 || sts == constants::AST_I2CS_STOP
             {
                 // S: (TX_NAK)|P
-                self.regs().i2cc0c().write(|w| unsafe {
-                    w.rx_pool_buffer_size().bits(constants::I2C_BUF_SIZE - 1)
-                });
-
-                cmd |= constants::AST_I2CS_RX_BUFF_EN;
+                self.arm_slave_receive(&mut cmd);
                 unsafe {
                     self.regs().i2cs28().write(|w| w.bits(cmd));
                 }
