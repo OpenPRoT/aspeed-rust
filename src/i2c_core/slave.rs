@@ -255,7 +255,7 @@ impl Ast1060I2c<'_> {
     /// Enable slave mode interrupts
     fn enable_slave_interrupts(&mut self) {
         let mut mask = constants::AST_I2CS_PKT_DONE | constants::AST_I2CS_INACTIVE_TO;
-        if self.xfer_mode == I2cXferMode::BufferMode {
+        if self.xfer_mode == I2cXferMode::BufferMode || self.xfer_mode == I2cXferMode::DmaMode {
             mask |= constants::AST_I2CM_ABNORMAL
                 | constants::AST_I2CM_NORMAL_STOP
                 | constants::AST_I2CM_RX_DONE
@@ -408,6 +408,14 @@ impl Ast1060I2c<'_> {
                 self.regs().i2cs28().write(|w| w.bits(cmd));
             }
             Ok(to_write)
+        } else if self.xfer_mode == I2cXferMode::DmaMode {
+            // Trigger slave transmit
+            let mut cmd = constants::AST_I2CS_ACTIVE_ALL | constants::AST_I2CS_PKT_MODE_EN;
+            cmd |= constants::AST_I2CS_TX_DMA_EN;
+            unsafe {
+                self.regs().i2cs28().write(|w| w.bits(cmd));
+            }
+            Ok(1)
         } else {
             // byte mode
             let cmd = constants::AST_I2CS_ACTIVE_ALL | constants::AST_I2CS_TX_CMD;
@@ -462,7 +470,9 @@ impl Ast1060I2c<'_> {
                 unsafe {
                     self.regs().i2cs28().write(|w| w.bits(cmd));
                 }
-                return Some(SlaveEvent::WriteRequest);
+                return Some(SlaveEvent::DataReceived {
+                    len: self.slave_rx_len(),
+                });
             } else if sts == constants::AST_I2CS_SLAVE_MATCH | constants::AST_I2CS_STOP {
                 // S: Sw|P
                 self.arm_slave_receive(&mut cmd);
