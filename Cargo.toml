@@ -51,3 +51,11 @@ cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 cortex-m-rt = { version = "0.7.5", features = ["device"] }
 panic-halt = "1.0.0"
 
+[[bin]]
+name = "i2c_master_dma"
+path = "src/rx-tx-test/i2c_master_dma.rs"
+
+[[bin]]
+name = "i2c_slave_dma"
+path = "src/rx-tx-test/i2c_slave_dma.rs"
+
