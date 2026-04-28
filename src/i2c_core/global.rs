@@ -58,6 +58,16 @@ pub fn init_i2c_global() {
         let scu = &*ast1060_pac::Scu::ptr();
         let i2cg = &*ast1060_pac::I2cglobal::ptr();
 
+        // CRITICAL: Unlock SCU registers first!
+        // AST chips have a protection register that must be unlocked
+        // Write magic value 0x1688A8A8 to SCU000 to unlock
+        scu.scu000().write(|w| w.bits(0x1688A8A8));
+
+        // Enable I2C clock by clearing clock stop bit
+        // SCU084 is Clock Stop Control Clear register for Group 0
+        // Bit 2 controls I2C clock
+        scu.scu084().write(|w| w.bits(1 << 2));
+
         // Reset I2C/SMBus controller (assert reset)
         // Reference: ast1060_i2c.rs:327
         scu.scu050().write(|w| w.rst_i2csmbus_ctrl().set_bit());
